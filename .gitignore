@@ -1,0 +1,22 @@
+# Outputs generados por los scripts (no versionar)
+*.npz
+*.png
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.ipynb_checkpoints/
+
+# Datos CFD (demasiado grandes, viven en Simulaciones/)
+*.mat
+*.stl
+
+# Entornos virtuales
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
