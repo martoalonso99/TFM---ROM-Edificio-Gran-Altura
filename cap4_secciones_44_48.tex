@@ -1,0 +1,154 @@
+% =========================================================
+%  CAPÍTULO 4 — Secciones 4.4 a 4.8
+%  Para insertar después de la tabla tab:mesh_independence
+% =========================================================
+
+% ----------------------------------------------------------
+\section{Condiciones de contorno}
+\label{sec:bcs}
+% ----------------------------------------------------------
+
+Las condiciones de contorno definen el entorno físico en el que tiene lugar la simulación. Con la finalidad de reproducir de manera fiel las condiciones de un túnel de viento de capa límite atmosférica, se imponen perfiles de velocidad, energía turbulenta y tasa de disipación específica en la sección de entrada, y se aplican funciones de pared diferenciadas en las superficies sólidas en función de su naturaleza física. La \autoref{tab:bcs} recoge de manera resumida las condiciones aplicadas sobre cada parche del dominio para las cinco variables del sistema.
+
+\begin{table}[htbp]
+\centering
+\caption{Condiciones de contorno por parche y variable. Las abreviaturas aluden a los tipos de OpenFOAM: \textit{pIOV}: \texttt{pressureInletOutletVelocity}; \textit{zG}: \texttt{zeroGradient}; \textit{noSlip}: \texttt{fixedValue}~$(0,0,0)$; \textit{omWF}: \texttt{omegaWallFunction}; \textit{nutLR}: \texttt{nutLowReWallFunction}; \textit{kLR}: \texttt{kLowReWallFunction}; \textit{kqR}: \texttt{kqRWallFunction}; \textit{nutkAtmR}: \texttt{nutkAtmRoughWallFunction}; \textit{sym}: \texttt{symmetryPlane}.}
+\label{tab:bcs}
+\small
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{lccccc}
+\toprule
+Parche & $U$ & $p$ & $k$ & $\omega$ & $\nu_t$ \\
+\midrule
+inlet              & Perfil ABL       & \textit{zG}             & Perfil ABL    & Perfil ABL    & \texttt{calculated} \\
+outlet             & \textit{pIOV}    & \texttt{fixedValue}~$0$ & \textit{zG}   & \textit{zG}   & \textit{zG}  \\
+building           & \textit{noSlip}  & \textit{zG}             & \textit{kLR}  & \textit{omWF} & \textit{nutLR}    \\
+ground             & \textit{noSlip}  & \textit{zG}             & \textit{kqR}  & \textit{omWF} & \textit{nutkAtmR} \\
+sideLeft/sideRight & \multicolumn{5}{c}{\textit{sym}} \\
+top                & \multicolumn{5}{c}{\textit{sym}} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Perfil ABL de entrada}
+\label{sec:abl_inlet}
+
+El perfil de velocidad en la sección de entrada sigue la ley de potencias
+
+\begin{equation}
+    U(z) = U_H \left(\frac{z}{H}\right)^{\!\alpha},
+    \label{eq:abl_powerlaw}
+\end{equation}
+
+donde $U_H = 11$\,m/s es la velocidad de referencia a la altura del edificio $H = 0.40$\,m y $\alpha = 0.25$ es el exponente de rugosidad de terreno urbano denso, correspondiente a la Categoría~IV de las guías AIJ \cite{tominaga2008}. Para evitar la singularidad en la capa inmediata al suelo, el perfil se trunca al valor en $z_B = 0.05$\,m para $z < z_B$.
+
+La energía cinética turbulenta en la entrada se determina a partir de la intensidad de turbulencia variable con la altura,
+
+\begin{equation}
+    I(z) = 0.1 \left(\frac{z}{z_G}\right)^{-(\alpha + 0.05)},
+    \label{eq:abl_intensity}
+\end{equation}
+
+donde $z_G = 1.375$\,m es la altura de gradiente a escala de modelo. El perfil de $k$ se obtiene como
+
+\begin{equation}
+    k(z) = \bigl[I(z)\,U(z)\bigr]^2,
+    \label{eq:abl_k}
+\end{equation}
+
+y el de $\omega$ a partir de $k$ y la longitud de mezcla característica de la capa límite atmosférica \cite{tominaga2008}. Los tres perfiles se implementan mediante la condición \texttt{codedFixedValue} de OpenFOAM, que evalúa las expresiones anteriores celda a celda en la sección de entrada en tiempo de ejecución.
+
+\subsection{Tratamiento de pared}
+\label{sec:wall_treatment}
+
+La superficie del edificio se trata con \texttt{nutLowReWallFunction} y \texttt{kLowReWallFunction}, que resuelven de manera explícita la subcapa viscosa sin recurrir a la ley logarítmica. Esta elección es consistente con los valores $\bar{y}^+ \approx 1$ obtenidos sobre la malla V5 y con las recomendaciones del modelo $k$-$\omega$ SST en regiones de gradiente de presión adverso pronunciado \cite{menter1994}.
+
+En el suelo se aplica \texttt{nutkAtmRoughWallFunction} con longitud de rugosidad $z_0 = 0.005$\,m, coherente con el exponente $\alpha = 0.25$ del perfil de entrada. Esta función de pared modifica la velocidad de fricción efectiva en función de $z_0$ de manera que el perfil ABL se mantiene desarrollado desde la sección de entrada hasta la posición del edificio. La relevancia de esta elección queda de manifiesto en los casos de sensibilidad V3\_2 y V5\_1, donde la sustitución por \texttt{nutLowReWallFunction} en el suelo produce una degradación del perfil ABL y una caída del ${\approx}7\,\%$ en $C_{p,\mathrm{max}}$, como se discute en la \autoref{sec:mesh_sensitivity}.
+
+\subsection{Condiciones de contorno restantes}
+\label{sec:bcs_rest}
+
+En la sección de salida se impone presión cinemática nula (\texttt{fixedValue}~$p = 0$), que actúa como referencia para el campo de presiones. La velocidad se gestiona con \texttt{pressureInletOutletVelocity}, condición que permite reflujo local sin desestabilizar el solver. Los parches laterales y el techo se modelan como \texttt{symmetryPlane}, equivalente a imponer gradiente normal nulo en todas las variables y velocidad normal nula; esta condición es apropiada dado que el dominio presenta una anchura suficiente para que los efectos de bloqueo lateral sean despreciables.
+
+% ----------------------------------------------------------
+\section{Configuración del solver}
+\label{sec:solver}
+% ----------------------------------------------------------
+
+La simulación se lleva a cabo con el solver \texttt{simpleFoam}, que implementa el algoritmo SIMPLE (\textit{Semi-Implicit Method for Pressure-Linked Equations}) para flujo incompresible estacionario. Con la finalidad de mantener la estabilidad en presencia de mallas con no-ortogonalidad moderada, se aplica un corrector de no-ortogonalidad por iteración SIMPLE (\texttt{nNonOrthogonalCorrectors}~$= 1$).
+
+Los factores de relajación se fijan en $\omega_p = 0.3$ para la presión y $\omega_U = \omega_k = \omega_\omega = 0.7$ para la velocidad y las variables de turbulencia. Estos valores constituyen un compromiso estándar entre velocidad de convergencia y estabilidad para problemas de flujo sobre cuerpos romos, donde la presencia de zonas de recirculación puede provocar oscilaciones del residuo si la relajación es excesiva.
+
+Para la resolución de los sistemas lineales, la presión se resuelve con el solver GAMG (\textit{Geometric Agglomerated algebraic MultiGrid}) con suavizador DIC, eficiente en mallas de gran tamaño al reducir el coste de iteración mediante agrupación algebraica. La velocidad y las variables de turbulencia se resuelven con \texttt{smoothSolver} y suavizador simétrico de Gauss-Seidel. Las tolerancias absolutas son $10^{-8}$ para la presión y $10^{-7}$ para las demás variables, con tolerancias relativas de $5 \times 10^{-2}$ y $10^{-1}$, respectivamente.
+
+En cuanto a los esquemas de discretización, el término temporal se trata con \texttt{steadyState}. Los gradientes se evalúan con el esquema de Gauss lineal con limitador de celda (\texttt{cellLimited Gauss linear 1}), que acota los gradientes sin degradar la precisión en zonas de flujo suave. El término convectivo de la cantidad de movimiento se discretiza con \texttt{linearUpwind} (segundo orden con sesgo aguas arriba), mientras que los términos convectivos de $k$ y $\omega$ emplean el esquema \texttt{upwind} de primer orden con la finalidad de garantizar la positividad de las variables de turbulencia en zonas de alta deformación. Los términos laplacianos y las correcciones de gradiente normal se tratan con el esquema \texttt{corrected}, que incorpora la corrección de no-ortogonalidad de manera explícita. El número de iteraciones se fija en 3500 para la totalidad de los casos.
+
+% ----------------------------------------------------------
+\section{Criterios de convergencia}
+\label{sec:convergence}
+% ----------------------------------------------------------
+
+La convergencia de cada simulación se verifica mediante dos criterios complementarios que operan en escalas distintas: los residuos numéricos de las ecuaciones discretizadas y las magnitudes físicas integrales del flujo.
+
+El criterio primario exige que los residuos normalizados de todas las variables ($p$, $\mathbf{U}$, $k$, $\omega$) desciendan por debajo de $10^{-6}$, umbral impuesto mediante \texttt{residualControl} en \texttt{fvSolution}. En la práctica, las 3500 iteraciones de cada caso producen residuos del orden de $10^{-8}$, lo que indica que los errores de iteración son despreciables frente a los errores de discretización.
+
+El criterio secundario consiste en el seguimiento de magnitudes físicas a lo largo de las iteraciones. El coeficiente de arrastre $C_d$ y los valores de presión registrados por las sondas de la \autoref{sec:probes} se monitorizan en cada iteración mediante los diccionarios \texttt{forceCoeffs} y \texttt{probes} del \texttt{controlDict}; la solución se considera convergida cuando ambas magnitudes alcanzan un valor estacionario sin oscilaciones apreciables durante las últimas 500 iteraciones. Para el caso base V5 ($\theta = 0^\circ$) se obtiene $C_d = 0.974$.
+
+% ----------------------------------------------------------
+\section{Estudio de sensibilidad de malla}
+\label{sec:mesh_sensitivity}
+% ----------------------------------------------------------
+
+Los resultados cuantitativos del estudio de independencia de malla se recogen en la \autoref{tab:mesh_independence}. El análisis se articula en torno a tres ejes de variación independientes: el refinamiento global y la geometría de las cajas volumétricas, el tratamiento de pared en el edificio, y el tratamiento de pared en el suelo.
+
+\paragraph{Refinamiento global (V1 $\to$ V2 $\to$ V3).}
+La versión V1, con $0.93\,\mathrm{M}$ celdas y una cobertura de capas del $11.3\,\%$, resulta insuficiente para resolver la capa límite del edificio: $\bar{y}^+ \approx 89$ sitúa la primera celda en la zona logarítmica, y el escaso número de prismas extruidos compromete la representación de los gradientes de presión en la pared. La versión V2 aumenta el recuento hasta $6.18\,\mathrm{M}$ celdas, pero la cobertura de capas desciende al $2.3\,\%$ al no disponer de malla base suficientemente fina: el módulo de capas de \texttt{snappyHexMesh} no logra extruir con éxito la mayoría de los prismas, y el coeficiente de arrastre sube de manera artificial hasta $C_d = 1.001$. Las métricas de calidad confirman esta deficiencia: $\varPhi_\mathrm{max} = 78.3^\circ$ y $S_\mathrm{max} = 10.98$, ambas por encima de los límites admisibles.
+
+A partir de V3 se alcanza la resolución necesaria: $15.20\,\mathrm{M}$ celdas, cobertura del $91.0\,\%$, $\varPhi_\mathrm{max} = 34.2^\circ$ y $S_\mathrm{max} = 2.09$, ambas dentro de los límites recomendados. La incorporación en V4 de una caja de refinamiento aguas arriba, y la extensión de las cajas en V5, no producen variación apreciable en $C_d$ ni en $C_{p,\mathrm{max}}$. Por ende, el campo de presión puede considerarse independiente de la malla a partir de V3, y la configuración de V5 se adopta por razones de calidad del campo en la estela y homogeneidad aguas arriba.
+
+\paragraph{Tratamiento de pared en el edificio (V3 $\to$ V3\_1; V4 $\to$ V4\_1; V3\_1 $\to$ V5).}
+La comparación entre versiones que comparten de manera exacta la misma malla pero difieren únicamente en la función de pared del edificio ilustra el impacto de la consistencia del modelo. Con \texttt{nutkWallFunction}, el valor medio $\bar{y}^+ = 0.30$ resulta incompatible con la ley logarítmica que dicha función presupone ($y^+ \in [30,\,300]$). La sustitución por \texttt{nutLowReWallFunction} produce $\bar{y}^+ = 1.02$, concordante con el régimen de subcapa viscosa. El efecto sobre las magnitudes integrales es moderado ($\Delta C_d < 0.1\,\%$), lo que es esperable dado que el campo de presión está principalmente controlado por la geometría y la separación del flujo en las aristas. Sin embargo, la consistencia física entre modelo de turbulencia, función de pared y rango de $y^+$ constituye un requisito de rigor metodológico irrenunciable.
+
+\paragraph{Tratamiento de pared en el suelo (V3\_2, V5\_1).}
+La sustitución de \texttt{nutkAtmRoughWallFunction} por \texttt{nutLowReWallFunction} en el suelo se llevó a cabo con la finalidad de aproximar la condición de pared lisa del túnel TPU. Sin embargo, esta condición es físicamente inconsistente con el perfil ABL rugoso impuesto en la entrada: al romperse el equilibrio entre perfil de velocidad y rugosidad de pared, el perfil se degrada entre entrada y edificio, y $C_{p,\mathrm{max}}$ cae un $7\,\%$ (de $0.966$ a $0.900$) y $C_d$ un $2.3\,\%$. El tratamiento riguroso de la condición de suelo liso requeriría redefinir también el perfil de entrada para que sea coherente con una pared hidráulicamente lisa, lo que queda fuera del alcance de este estudio. Por ende, V3\_2 y V5\_1 se excluyen del barrido paramétrico; su utilidad reside en cuantificar la sensibilidad del campo de presión a las condiciones del suelo, aspecto relevante para interpretar las diferencias residuales entre simulación y datos TPU.
+
+La malla V5 con \texttt{nutLowReWallFunction} en el edificio y \texttt{nutkAtmRoughWallFunction} en el suelo se adopta como configuración definitiva para los 21 casos del barrido paramétrico.
+
+% ----------------------------------------------------------
+\section{Definición y extracción de las sondas de presión}
+\label{sec:probes}
+% ----------------------------------------------------------
+
+La construcción del modelo de orden reducido requiere extraer el campo de presión en un conjunto fijo de puntos de muestreo sobre la superficie del edificio, de manera que la componente $i$-ésima del vector de snapshot $\mathbf{Cp}_k$ represente siempre el mismo punto físico con independencia del ángulo de incidencia $\theta$. Con esta finalidad se definen 400~sondas de presión en el sistema de referencia solidario al edificio (\textit{body-fixed}).
+
+Las sondas se distribuyen de manera uniforme sobre las cuatro caras laterales: 100 por cara, dispuestas en una rejilla de 5~columnas $\times$ 20~filas con espaciado uniforme $\Delta = 0.02$\,m tanto en la dirección horizontal como en la vertical. No se incluyen sondas en el techo. Las coordenadas de la rejilla en la cara de barlovento ($x = -0.0501$\,m para $\theta = 0^\circ$) son
+
+\begin{equation}
+    y_j \in \{-0.04,\,-0.02,\,0,\,+0.02,\,+0.04\}\,\mathrm{m},
+    \quad
+    z_i = 0.01 + 0.02\,(i-1)\,\mathrm{m}, \quad i = 1,\ldots,20,
+    \label{eq:probe_coords}
+\end{equation}
+
+y de manera análoga para las caras de sotavento ($x = +0.0501$\,m) y laterales ($y = \pm0.0501$\,m). Las sondas se sitúan a $0.1$\,mm de la superficie del sólido, de modo que quedan en el fluido dentro de la segunda capa prismática, donde $\partial p / \partial n \approx 0$ y el valor de presión es prácticamente idéntico al de la pared \cite{blocken2007}.
+
+Para los casos con $\theta \neq 0^\circ$, las coordenadas de las sondas se obtienen aplicando la misma rotación que se impone a la geometría STL,
+
+\begin{equation}
+    \begin{pmatrix} x' \\ y' \end{pmatrix}
+    =
+    \begin{pmatrix} \cos\theta & -\sin\theta \\ \sin\theta & \cos\theta \end{pmatrix}
+    \begin{pmatrix} x \\ y \end{pmatrix},
+    \label{eq:probe_rotation}
+\end{equation}
+
+de modo que los 400~puntos corresponden siempre a las mismas posiciones en el sistema de referencia del edificio en la totalidad del barrido paramétrico. El espaciado uniforme de la rejilla implica que la matriz de pesos de áreas es proporcional a la identidad, lo que valida el uso de la descomposición en valores singulares estándar, sin ponderación, en el paso de POD (véase el \autoref{cap:rom}).
+
+El coeficiente de presión en cada sonda se obtiene directamente de la presión cinemática registrada por OpenFOAM,
+
+\begin{equation}
+    C_p = \frac{p_{\mathrm{kin}}}{q_{\mathrm{ref}}} = \frac{p}{\tfrac{1}{2}U_H^2} = \frac{p}{60.5}\,\mathrm{m^{-2}\,s^{2}},
+    \label{eq:cp_probes}
+\end{equation}
+
+donde $p_\infty = 0$ queda impuesto de manera implícita por la condición \texttt{fixedValue}~$p = 0$ en la salida. Para cada caso del barrido se toma el valor de presión registrado en la iteración~3500, correspondiente a la solución estacionaria convergida, construyendo así la columna $k$-ésima de la matriz de snapshots $X \in \mathbb{R}^{400 \times 21}$.

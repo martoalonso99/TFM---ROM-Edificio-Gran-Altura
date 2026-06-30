@@ -4,13 +4,15 @@ ROM_GPR.py
 
 Entrena modelos GPR (uno por modo POD) e implementa:
 
-  Fase 1 — Comparacion de kernels via LOO-CV a r fijo (R_COMPARE):
+  Fase 1 — Comparacion de kernels via LOO-CV a r_compare (calculado automaticamente
+    como el r que supera el 99.5% de energia acumulada, clamped a [3, N-2]):
     Compara Matern52, Matern32, RBF y RationalQuadratic.
     Selecciona el kernel con menor error LOO medio.
 
   Fase 2 — Sweep de r con el mejor kernel:
-    Barre r = 1..R_MAX y calcula el error LOO total, de proyeccion e
-    interpolacion. El r* optimo minimiza el error LOO total.
+    Barre r = 1..r_max (= N_snap - 2, rango efectivo del fold LOO) y calcula
+    el error LOO total, de proyeccion e interpolacion.
+    El r* optimo minimiza el error LOO total.
 
   Fase 3 — Modelo completo con r* y mejor kernel:
     Entrena r* GPRs sobre los 11 snapshots completos.
@@ -57,9 +59,10 @@ SCRIPT_DIR  = Path(__file__).resolve().parent
 POD_NPZ     = SCRIPT_DIR / "ROM_POD_basis.npz"
 OUT_NPZ     = SCRIPT_DIR / "ROM_GPR_results.npz"
 
-R_COMPARE   = 6      # r fijo para comparacion de kernels (99.95% energia)
-R_MIN       = 1      # inicio del sweep
-R_MAX       = 9      # fin del sweep (rango efectivo con N=11 tras centrado)
+R_MIN       = 1      # inicio del sweep (siempre 1)
+# R_MAX y R_COMPARE se calculan en main() a partir de N_snap:
+#   R_MAX     = N_snap - 2  (rango efectivo del fold LOO con N-1 snapshots centrados)
+#   R_COMPARE = r tal que energia acumulada >= 99.5%, clamped a [3, R_MAX]
 N_RESTARTS  = 50     # restarts MLE por GPR (mayor robustez frente a optimos locales)
 THETA_SCALE = 50.0   # theta_norm = theta / THETA_SCALE in [0, 1]
 
@@ -107,7 +110,6 @@ def make_kernel(name: str, var_y: float):
             inicial y los bounds del ruido de forma adaptativa por modo).
     """
     var_y = max(var_y, 1e-8)
-
     amp = C(
         constant_value=var_y,
         constant_value_bounds=(1e-3 * var_y, 1e3 * var_y),
@@ -217,16 +219,16 @@ def loo_cv_full(
 #  4. FASE 1 — COMPARACION DE KERNELS
 # =======================================================================
 
-def compare_kernels(X: np.ndarray, angles: np.ndarray) -> dict:
-    """LOO-CV a R_COMPARE para todos los kernels. Devuelve dict con resultados."""
+def compare_kernels(X: np.ndarray, angles: np.ndarray, r_compare: int) -> dict:
+    """LOO-CV a r_compare para todos los kernels. Devuelve dict con resultados."""
     print(f"{'='*65}")
-    print(f"  Fase 1: comparacion de kernels  (r = {R_COMPARE})")
+    print(f"  Fase 1: comparacion de kernels  (r = {r_compare})")
     print(f"{'='*65}")
 
     results = {}
     for name in KERNEL_NAMES:
         print(f"  [{name}] ...", flush=True)
-        err_t, err_p, _ = loo_cv_full(X, angles, R_COMPARE, name)
+        err_t, err_p, _ = loo_cv_full(X, angles, r_compare, name)
         err_i = err_t - err_p
         results[name] = {
             "err_total":  err_t,
@@ -251,17 +253,17 @@ def compare_kernels(X: np.ndarray, angles: np.ndarray) -> dict:
 #  5. FASE 2 — SWEEP DE r CON EL MEJOR KERNEL
 # =======================================================================
 
-def sweep_r(X: np.ndarray, angles: np.ndarray, kernel_name: str) -> dict:
+def sweep_r(X: np.ndarray, angles: np.ndarray, kernel_name: str, r_max: int) -> dict:
     """
-    LOO-CV completo para r = R_MIN..R_MAX con el kernel seleccionado.
+    LOO-CV completo para r = R_MIN..r_max con el kernel seleccionado.
     Devuelve dict indexado por r con errores y predicciones LOO.
     """
     print(f"{'='*65}")
-    print(f"  Fase 2: sweep de r  (kernel = {kernel_name})")
+    print(f"  Fase 2: sweep de r  (kernel = {kernel_name}, r_max = {r_max})")
     print(f"{'='*65}")
 
     sweep = {}
-    for r in range(R_MIN, R_MAX + 1):
+    for r in range(R_MIN, r_max + 1):
         print(f"  r = {r} ...", flush=True)
         err_t, err_p, cp_loo = loo_cv_full(X, angles, r, kernel_name)
         err_i = err_t - err_p
@@ -345,7 +347,7 @@ def fit_full_model(
 #  7. VISUALIZACION
 # =======================================================================
 
-def plot_kernel_comparison(kernel_results: dict, out_path: Path):
+def plot_kernel_comparison(kernel_results: dict, r_compare: int, out_path: Path):
     """Bar chart del error LOO medio por kernel, desglosado por fold."""
     names  = KERNEL_NAMES
     n      = len(names)
@@ -367,7 +369,7 @@ def plot_kernel_comparison(kernel_results: dict, out_path: Path):
     ax1.set_xticks(x)
     ax1.set_xticklabels(names)
     ax1.set_ylabel("Error LOO relativo medio")
-    ax1.set_title(f"Error LOO total por kernel  (r = {R_COMPARE})")
+    ax1.set_title(f"Error LOO total por kernel  (r = {r_compare})")
     ax1.grid(True, axis="y", alpha=0.3)
     for bar, val in zip(bars, means_t):
         ax1.text(bar.get_x() + bar.get_width() / 2, val + 0.001,
@@ -385,7 +387,7 @@ def plot_kernel_comparison(kernel_results: dict, out_path: Path):
     ax2.legend()
     ax2.grid(True, axis="y", alpha=0.3)
 
-    fig.suptitle(f"Comparacion de kernels GPR  (r = {R_COMPARE}, N = {R_COMPARE} modos)",
+    fig.suptitle(f"Comparacion de kernels GPR  (r = {r_compare}, N = {r_compare} modos)",
                  fontweight="bold")
     fig.tight_layout()
     fig.savefig(out_path, dpi=150)
@@ -393,16 +395,16 @@ def plot_kernel_comparison(kernel_results: dict, out_path: Path):
     print(f"  -> {out_path.name}")
 
 
-def plot_r_sweep(sweep: dict, best_kernel: str, r_star: int, out_path: Path):
+def plot_r_sweep(sweep: dict, best_kernel: str, r_star: int, angles: np.ndarray,
+                 out_path: Path):
     """Curva en U: error LOO total, de proyeccion e interpolacion vs r."""
-    r_vals   = sorted(sweep.keys())
-    tot      = [sweep[r]["mean_total"]   for r in r_vals]
-    proj     = [sweep[r]["mean_proj"]    for r in r_vals]
-    interp   = [sweep[r]["mean_interp"]  for r in r_vals]
+    r_vals    = sorted(sweep.keys())
+    tot       = [sweep[r]["mean_total"]   for r in r_vals]
+    proj      = [sweep[r]["mean_proj"]    for r in r_vals]
+    interp    = [sweep[r]["mean_interp"]  for r in r_vals]
 
     # Error por fold para el r*
     err_folds = sweep[r_star]["err_total"]
-    angles_arr = np.arange(len(err_folds)) * 5  # aproximacion
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4.5))
 
@@ -423,7 +425,7 @@ def plot_r_sweep(sweep: dict, best_kernel: str, r_star: int, out_path: Path):
     ax2.bar(np.arange(len(err_folds)), err_folds,
             color="#1f4e79", alpha=0.8, edgecolor="white")
     ax2.set_xticks(np.arange(len(err_folds)))
-    ax2.set_xticklabels([f"{int(a)}°" for a in np.arange(0, 55, 5)], fontsize=9)
+    ax2.set_xticklabels([f"{a:g}°" for a in angles], fontsize=9)
     ax2.set_xlabel("Angulo excluido theta")
     ax2.set_ylabel("Error LOO relativo")
     ax2.set_title(f"Error LOO por fold  (r* = {r_star})")
@@ -485,7 +487,7 @@ def plot_gpr_mode_fits(
             fontsize=10,
         )
         ax.grid(True, alpha=0.3)
-        ax.set_xticks(np.arange(0, 55, 5))
+        ax.set_xticks(angles)
         if j >= r_star - n_cols:
             ax.set_xlabel("theta (deg)")
         if j % n_cols == 0:
@@ -628,12 +630,26 @@ def main():
     # X_centered = Phi @ A  (A ya incluye los valores singulares: A = diag(sigma) @ Vt)
     X_full = pod["Phi"] @ pod["A"] + pod["mean"][:, None]   # (N_probes, N_snap)
     angles = pod["angles"]
+    N_snap = X_full.shape[1]
+
+    # Rango efectivo del fold LOO: N-1 snapshots centrados => rango <= N-2
+    r_max = N_snap - 2
+
+    # r_compare: r que supera el 99.5% de energia, clamped a [3, r_max]
+    cum_e = pod["cum_energy"]
+    r_compare = int(np.searchsorted(cum_e, 0.995)) + 1
+    r_compare = int(np.clip(r_compare, 3, r_max))
+
+    print(f"\n  Parametros calculados automaticamente:")
+    print(f"    N_snap    = {N_snap}")
+    print(f"    r_max     = {r_max}  (rango efectivo fold LOO = N-2)")
+    print(f"    r_compare = {r_compare}  (energia acumulada >= 99.5%)\n")
 
     # 1. Comparacion de kernels
-    kernel_results, best_kernel = compare_kernels(X_full, angles)
+    kernel_results, best_kernel = compare_kernels(X_full, angles, r_compare)
 
     # 2. Sweep de r con el mejor kernel
-    sweep, r_star = sweep_r(X_full, angles, best_kernel)
+    sweep, r_star = sweep_r(X_full, angles, best_kernel, r_max)
 
     # 3. Modelo completo con r* y mejor kernel
     gprs, mu_dense, std_dense, theta_dense = fit_full_model(pod, r_star, best_kernel)
@@ -644,11 +660,11 @@ def main():
     print(f"{'='*65}")
 
     plot_kernel_comparison(
-        kernel_results,
+        kernel_results, r_compare,
         SCRIPT_DIR / "GPR_kernel_comparison.png",
     )
     plot_r_sweep(
-        sweep, best_kernel, r_star,
+        sweep, best_kernel, r_star, angles,
         SCRIPT_DIR / "GPR_r_sweep.png",
     )
     plot_gpr_mode_fits(

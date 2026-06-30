@@ -3,11 +3,11 @@ ROM_POD.py
 ==========
 
 Lee directamente los ficheros de probes de OpenFOAM (antes via MATLAB),
-construye la matriz de snapshots Cp[400 x 11] y realiza la descomposicion
+construye la matriz de snapshots Cp[400 x N] y realiza la descomposicion
 POD via SVD. Integra lo que antes hacia ROM_PostProc_Batch.m.
 
 Pipeline:
-  OpenFOAM p files  ->  Cp_matrix[400x11]  ->  POD (SVD)  ->  ROM_POD_basis.npz
+  OpenFOAM p files  ->  Cp_matrix[400xN]  ->  POD (SVD)  ->  ROM_POD_basis.npz
 
 Salidas (en Programacion/):
   - ROM_POD_basis.npz            : base POD para ROM_GPR.py
@@ -20,7 +20,8 @@ Salidas (en Programacion/):
 Notas:
   - p en OpenFOAM incompresible es presion cinematica [m^2/s^2].
     Cp = p / (0.5 * Uref^2) directamente, sin dividir por rho.
-  - N = 11 snapshots -> rango efectivo <= 10 tras centrado.
+  - Los angulos se descubren automaticamente desde carpetas ROMCase_theta_NN.
+  - N = len(ANGLES) snapshots -> rango efectivo <= N-1 tras centrado.
   - Distribucion uniforme de probes -> POD sin ponderacion de areas es valida.
 
 Autor: Martín Rodríguez García
@@ -47,7 +48,36 @@ OUT_NPZ    = SCRIPT_DIR / "ROM_POD_basis.npz"
 UREF      = 11.0                  # m/s  - velocidad de referencia a z=H
 Q_REF     = 0.5 * UREF ** 2      # m^2/s^2 - presion dinamica cinematica
 N_PROBES  = 400
-ANGLES    = list(range(0, 55, 5)) # [0, 5, 10, ..., 50]
+
+
+def discover_angles(data_dir: Path) -> list[float]:
+    """
+    Descubre los angulos ROM escaneando carpetas ROMCase_theta_* en data_dir.
+    Soporta nombres enteros (theta_10) y decimales (theta_2p5, 'p' = punto decimal).
+    Devuelve la lista ordenada de angulos (float) encontrados.
+    """
+    pattern = re.compile(r'^ROMCase_theta_([\dp]+)$')
+    angles = []
+    for entry in data_dir.iterdir():
+        if entry.is_dir():
+            m = pattern.match(entry.name)
+            if m:
+                angles.append(float(m.group(1).replace('p', '.')))
+    if not angles:
+        raise FileNotFoundError(
+            f"No se encontraron carpetas ROMCase_theta_* en {data_dir}"
+        )
+    return sorted(angles)
+
+
+def fmt_angle(theta: float) -> str:
+    """Convierte angulo a string de nombre de carpeta. 2.5 -> '2p5', 10.0 -> '10'."""
+    if theta == int(theta):
+        return f"{int(theta):02d}"
+    return str(theta).replace(".", "p")
+
+
+ANGLES = discover_angles(DATA_DIR)
 
 # POD
 ENERGY_THRESHOLDS = [0.90, 0.95, 0.99, 0.999]
@@ -118,8 +148,8 @@ def _parse_probe_file(fpath: Path) -> tuple[np.ndarray, float, np.ndarray]:
 
 def load_openfoam_snapshots() -> dict:
     """
-    Lee los ficheros p de OpenFOAM para los 11 casos ROM y construye
-    la matriz de snapshots Cp[400 x 11].
+    Lee los ficheros p de OpenFOAM para los casos ROM y construye
+    la matriz de snapshots Cp[400 x N].
 
     Estructura de ficheros esperada:
         DATA_DIR/ROMCase_theta_XX/postProcessing/probes_buildingPressure/0/p
@@ -137,7 +167,7 @@ def load_openfoam_snapshots() -> dict:
     print(f"  {'-'*54}")
 
     for i, theta in enumerate(ANGLES):
-        tag   = f"theta_{theta:02d}"
+        tag   = f"theta_{fmt_angle(theta)}"
         fpath = (DATA_DIR / f"ROMCase_{tag}"
                  / "postProcessing" / "probes_buildingPressure" / "0" / "p")
 
@@ -316,26 +346,48 @@ def report_loo_projection(err: np.ndarray, angles: np.ndarray):
 def plot_snapshot_overview(X: np.ndarray, angles: np.ndarray, out_path: Path):
     """
     Mapa de calor de la matriz de snapshots + perfiles Cp por angulo.
-    Equivalente a la figura de ROM_PostProc_Batch.m.
+    Eje vertical creciente: probe 0 (z=0.01 m) en la base, probe 399 arriba.
+    Marcas de zona con labels de cada cara del edificio.
     """
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+    # Ordenacion de caras: 100 probes cada una, probes 0-99=Sotavento, etc.
+    ZONE_BOUNDS = [0, 100, 200, 300, 400]
+    ZONE_LABELS = ["Sotavento", "Barlovento", "Lateral+", "Lateral-"]
+    ZONE_COLORS = ["#1f77b4", "#d62728", "#2ca02c", "#ff7f0e"]
 
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13, 6))
+
+    # --- Panel 1: mapa de calor ---
+    # origin="lower": probe 0 en la base, eje y creciente hacia arriba
     im = ax1.imshow(
-        X, aspect="auto", origin="upper",
+        X, aspect="auto", origin="lower",
         cmap="RdBu_r", vmin=-2.5, vmax=1.1,
-        extent=[angles[0] - 2.5, angles[-1] + 2.5, N_PROBES, 0],
+        extent=[angles[0] - 2.5, angles[-1] + 2.5, 0, N_PROBES],
         interpolation="nearest",
     )
     ax1.set_xticks(angles)
+    ax1.set_xticklabels([f"{a:g}" for a in angles], fontsize=8)
     ax1.set_xlabel("theta (deg)")
     ax1.set_ylabel("Indice de probe")
-    ax1.set_title("Matriz de snapshots Cp  [400 x 11]")
+    ax1.set_title(f"Matriz de snapshots Cp  [400 x {len(angles)}]")
     fig.colorbar(im, ax=ax1, shrink=0.85).set_label("Cp")
 
+    # Lineas divisorias y labels de zona en panel 1 (dentro del heatmap)
+    x_label = angles[0] - 1.5   # cerca del borde izquierdo del extent
+    for i, (label, color) in enumerate(zip(ZONE_LABELS, ZONE_COLORS)):
+        mid = (ZONE_BOUNDS[i] + ZONE_BOUNDS[i + 1]) / 2
+        if i > 0:
+            ax1.axhline(ZONE_BOUNDS[i], color="white", lw=1.0, ls="--", alpha=0.8)
+        ax1.text(x_label, mid, label,
+                 ha="left", va="center", fontsize=8, color="white",
+                 fontweight="bold",
+                 bbox=dict(boxstyle="round,pad=0.2", facecolor=color,
+                           alpha=0.75, edgecolor="none"))
+
+    # --- Panel 2: perfiles por angulo ---
     cmap_lines = plt.cm.plasma(np.linspace(0, 1, len(angles)))
     for i, (theta, color) in enumerate(zip(angles, cmap_lines)):
         ax2.plot(X[:, i], np.arange(N_PROBES), color=color, lw=1.0,
-                 label=f"{int(theta)}deg")
+                 label=f"{theta:g}deg")
     ax2.set_xlabel("Cp")
     ax2.set_ylabel("Indice de probe")
     ax2.set_title("Perfiles Cp por angulo")
@@ -343,9 +395,21 @@ def plot_snapshot_overview(X: np.ndarray, angles: np.ndarray, out_path: Path):
     ax2.grid(True, alpha=0.25)
     ax2.legend(fontsize=7, ncol=2, loc="lower right")
 
+    # Lineas divisorias y labels de zona en panel 2 (dentro del area de datos)
+    trans2 = ax2.get_yaxis_transform()   # x en coords de ejes [0,1], y en datos
+    for i, (label, color) in enumerate(zip(ZONE_LABELS, ZONE_COLORS)):
+        mid = (ZONE_BOUNDS[i] + ZONE_BOUNDS[i + 1]) / 2
+        if i > 0:
+            ax2.axhline(ZONE_BOUNDS[i], color="gray", lw=1.0, ls="--", alpha=0.6)
+        ax2.text(0.02, mid, label, transform=trans2,
+                 ha="left", va="center", fontsize=8, color=color,
+                 fontweight="bold",
+                 bbox=dict(boxstyle="round,pad=0.2", facecolor="white",
+                           alpha=0.7, edgecolor="none"))
+
     fig.suptitle("ROM: extraccion de snapshots CFD (OpenFOAM)", fontweight="bold")
     fig.tight_layout()
-    fig.savefig(out_path, dpi=150)
+    fig.savefig(out_path, dpi=150, bbox_inches="tight")
     plt.close(fig)
     print(f"  -> {out_path.name}")
 
@@ -429,25 +493,25 @@ def identify_faces(probe_coords_theta0: np.ndarray) -> dict:
     x, y, z = (probe_coords_theta0[:, c] for c in range(3))
     faces = {}
 
-    faces["Leeward (x=+0.05)"] = {
+    faces["Sotavento (x=+0.05)"] = {
         "idx": np.where(np.abs(x - 0.05) < 5e-3)[0],
         "u": y[np.abs(x - 0.05) < 5e-3],
         "v": z[np.abs(x - 0.05) < 5e-3],
         "ulabel": "y (m)", "vlabel": "z (m)",
     }
-    faces["Windward (x=-0.05)"] = {
+    faces["Barlovento (x=-0.05)"] = {
         "idx": np.where(np.abs(x + 0.05) < 5e-3)[0],
         "u": y[np.abs(x + 0.05) < 5e-3],
         "v": z[np.abs(x + 0.05) < 5e-3],
         "ulabel": "y (m)", "vlabel": "z (m)",
     }
-    faces["Side (y=+0.05)"] = {
+    faces["Lateral+ (y=+0.05)"] = {
         "idx": np.where(np.abs(y - 0.05) < 5e-3)[0],
         "u": x[np.abs(y - 0.05) < 5e-3],
         "v": z[np.abs(y - 0.05) < 5e-3],
         "ulabel": "x (m)", "vlabel": "z (m)",
     }
-    faces["Side (y=-0.05)"] = {
+    faces["Lateral- (y=-0.05)"] = {
         "idx": np.where(np.abs(y + 0.05) < 5e-3)[0],
         "u": x[np.abs(y + 0.05) < 5e-3],
         "v": z[np.abs(y + 0.05) < 5e-3],
@@ -473,7 +537,7 @@ def plot_modes_unfolded(pod: dict, probe_coords: np.ndarray, out_path: Path,
                              figsize=(3.2 * N_FACES, 2.6 * n_rows),
                              sharex="col", sharey=True)
 
-    field_names = ["Mean"] + [f"Mode {j+1}" for j in range(n_modes)]
+    field_names = ["Media"] + [f"Modo {j+1}" for j in range(n_modes)]
     fields      = [mean]   + [Phi[:, j]      for j in range(n_modes)]
 
     for i_row, (name, field) in enumerate(zip(field_names, fields)):

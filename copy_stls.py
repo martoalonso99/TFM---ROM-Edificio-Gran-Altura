@@ -17,6 +17,9 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent   # TFM/Programacion/
 
 # ── Mapeo angulo -> nombre STL ───────────────────────────────────────────────
+# Solo cubre los 11 angulos enteros originales (0, 5, ..., 50).
+# Los casos con angulos decimales (2.5, 7.5, ...) ya llevan su STL embebido
+# en el ZIP generado por generate_new_cases.py y no requieren este script.
 ANGLE_STL = {
      0: "building.stl",
      5: "building_05.stl",
