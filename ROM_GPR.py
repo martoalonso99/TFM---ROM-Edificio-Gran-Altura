@@ -76,6 +76,8 @@ COLORS = {
     "RatQuad":  "#f4a261",
 }
 
+REF_TICKS = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45]   # ticks de referencia para ejes de angulo
+
 
 # =======================================================================
 #  1. CARGA
@@ -307,10 +309,10 @@ def fit_full_model(
     std_dense   : (r*, 200)  desviaciones estandar GPR en theta denso
     theta_dense : (200,)     angulos de la malla densa [deg]
     """
-    A      = pod["A"]          # (10, 11) coeficientes modales completos
+    A      = pod["A"]
     angles = pod["angles"]
     theta_norm  = angles / THETA_SCALE
-    theta_dense = np.linspace(0.0, 1.0, 200)
+    theta_dense = np.linspace(0.0, float(angles.max()) / THETA_SCALE, 200)
 
     gprs      = []
     mu_dense  = np.zeros((r_star, 200))
@@ -425,8 +427,11 @@ def plot_r_sweep(sweep: dict, best_kernel: str, r_star: int, angles: np.ndarray,
     # Panel 2: error por fold en r*
     ax2.bar(np.arange(len(err_folds)), err_folds,
             color="#1f4e79", alpha=0.8, edgecolor="white")
-    ax2.set_xticks(np.arange(len(err_folds)))
-    ax2.set_xticklabels([f"{a:g}°" for a in angles], fontsize=9)
+    ref_set     = set(REF_TICKS)
+    tick_pos    = [i for i, a in enumerate(angles) if a in ref_set]
+    tick_labels = [f"{int(angles[i]):g}°" for i in tick_pos]
+    ax2.set_xticks(tick_pos)
+    ax2.set_xticklabels(tick_labels, fontsize=9)
     ax2.set_xlabel("Angulo excluido theta")
     ax2.set_ylabel("Error LOO relativo")
     ax2.set_title(f"Error LOO por fold  (r* = {r_star})")
@@ -488,7 +493,7 @@ def plot_gpr_mode_fits(
             fontsize=10,
         )
         ax.grid(True, alpha=0.3)
-        ax.set_xticks(angles)
+        ax.set_xticks(REF_TICKS)
         if j >= r_star - n_cols:
             ax.set_xlabel("theta (deg)")
         if j % n_cols == 0:
@@ -628,36 +633,33 @@ def save_results(
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="ROM_GPR: GPR por modo POD")
     p.add_argument(
-        "--suffix", default="",
-        help="Sufijo para ficheros NPZ de E/S, p.ej. _11ang (default: sin sufijo)",
+        "--outdir", default="outputs/base_full",
+        help="Directorio con ROM_POD_basis.npz y donde se escriben los resultados",
     )
     return p.parse_args()
 
 
 def main():
     args   = _parse_args()
-    suffix = args.suffix
+    outdir = SCRIPT_DIR / args.outdir
+    outdir.mkdir(parents=True, exist_ok=True)
 
-    pod_npz = SCRIPT_DIR / f"ROM_POD_basis{suffix}.npz"
-    out_npz = SCRIPT_DIR / f"ROM_GPR_results{suffix}.npz"
+    pod_npz = outdir / "ROM_POD_basis.npz"
+    out_npz = outdir / "ROM_GPR_results.npz"
 
     # 0. Carga
     pod    = load_pod_basis(pod_npz)
-    # X_centered = Phi @ A  (A ya incluye los valores singulares: A = diag(sigma) @ Vt)
-    X_full = pod["Phi"] @ pod["A"] + pod["mean"][:, None]   # (N_probes, N_snap)
+    X_full = pod["Phi"] @ pod["A"] + pod["mean"][:, None]
     angles = pod["angles"]
     N_snap = X_full.shape[1]
 
-    # Rango efectivo del fold LOO: N-1 snapshots centrados => rango <= N-2
     r_max = N_snap - 2
 
-    # r_compare: r que supera el 99.5% de energia, clamped a [3, r_max]
-    cum_e = pod["cum_energy"]
+    cum_e     = pod["cum_energy"]
     r_compare = int(np.searchsorted(cum_e, 0.995)) + 1
     r_compare = int(np.clip(r_compare, 3, r_max))
 
-    print(f"\n  Parametros calculados automaticamente:")
-    print(f"    suffix    = '{suffix}'")
+    print(f"\n  Directorio: {outdir.relative_to(SCRIPT_DIR)}")
     print(f"    N_snap    = {N_snap}")
     print(f"    r_max     = {r_max}  (rango efectivo fold LOO = N-2)")
     print(f"    r_compare = {r_compare}  (energia acumulada >= 99.5%)\n")
@@ -665,48 +667,44 @@ def main():
     # 1. Comparacion de kernels
     kernel_results, best_kernel = compare_kernels(X_full, angles, r_compare)
 
-    # 2. Sweep de r con el mejor kernel
+    # 2. Sweep de r
     sweep, r_star = sweep_r(X_full, angles, best_kernel, r_max)
 
-    # 3. Modelo completo con r* y mejor kernel
+    # 3. Modelo completo
     gprs, mu_dense, std_dense, theta_dense = fit_full_model(pod, r_star, best_kernel)
 
     # 4. Figuras
     print(f"\n{'='*65}")
     print("  Generando figuras...")
     print(f"{'='*65}")
-
     plot_kernel_comparison(
-        kernel_results, r_compare,
-        SCRIPT_DIR / f"GPR_kernel_comparison{suffix}.png",
+        kernel_results, r_compare, outdir / "GPR_kernel_comparison.png",
     )
     plot_r_sweep(
-        sweep, best_kernel, r_star, angles,
-        SCRIPT_DIR / f"GPR_r_sweep{suffix}.png",
+        sweep, best_kernel, r_star, angles, outdir / "GPR_r_sweep.png",
     )
     plot_gpr_mode_fits(
         pod, r_star, best_kernel,
         mu_dense, std_dense, theta_dense,
-        SCRIPT_DIR / f"GPR_mode_fits{suffix}.png",
+        outdir / "GPR_mode_fits.png",
     )
     plot_loo_scatter(
         X_full, angles,
         sweep[r_star]["cp_pred_loo"], r_star, best_kernel,
-        SCRIPT_DIR / f"GPR_loo_scatter{suffix}.png",
+        outdir / "GPR_loo_scatter.png",
     )
 
     # 5. Guardado
     save_results(
         pod, best_kernel, r_star, sweep,
-        mu_dense, std_dense, theta_dense,
-        out_npz,
+        mu_dense, std_dense, theta_dense, out_npz,
     )
 
     print(f"\n{'='*65}")
-    print(f"  GPR completado (suffix='{suffix}').")
-    print(f"  Mejor kernel : {best_kernel}")
-    print(f"  r*           : {r_star}")
-    print(f"  Siguiente paso: ROM_test_intermediate.py  o  ROM_validation_TPU.py")
+    print(f"  GPR completado: outdir={args.outdir}")
+    print(f"  Mejor kernel : {best_kernel}  |  r* = {r_star}")
+    print(f"  Siguiente: python ROM_test_intermediate.py --outdir {args.outdir}")
+    print(f"{'='*65}\n")
     print(f"{'='*65}\n")
 
 

@@ -90,6 +90,13 @@ N_ROWS_FACE   = 20
 N_PROBES_FACE = N_COLS_FACE * N_ROWS_FACE   # 100 por cara
 N_FACES       = 4
 
+REF_TICKS = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45]   # ticks de referencia para ejes de angulo
+MAX_THETA = 45.0                                        # rango fundamental seccion cuadrada (C4)
+
+BASE_REF   = {0.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0}
+BASE_KAWAI = BASE_REF | {12.5, 17.5, 22.5, 23.75, 26.25, 27.5, 28.75}
+# BASE_FULL: todos los angulos descubiertos <= MAX_THETA (calculado en main)
+
 
 # =======================================================================
 #  1. LECTURA DIRECTA DE OpenFOAM
@@ -367,8 +374,8 @@ def plot_snapshot_overview(X: np.ndarray, angles: np.ndarray, out_path: Path):
         extent=[angles[0] - 2.5, angles[-1] + 2.5, 0, N_PROBES],
         interpolation="nearest",
     )
-    ax1.set_xticks(angles)
-    ax1.set_xticklabels([f"{a:g}" for a in angles], fontsize=8)
+    ax1.set_xticks(REF_TICKS)
+    ax1.set_xticklabels([f"{a:g}" for a in REF_TICKS], fontsize=8)
     ax1.set_xlabel("theta (deg)")
     ax1.set_ylabel("Indice de probe")
     ax1.set_title(f"Matriz de snapshots Cp  [400 x {len(angles)}]")
@@ -471,7 +478,7 @@ def plot_modal_coefficients(pod: dict, angles: np.ndarray, out_path: Path,
             fontsize=10,
         )
         ax.grid(True, alpha=0.3)
-        ax.set_xticks(angles)
+        ax.set_xticks(REF_TICKS)
         if j >= n_modes - n_cols:
             ax.set_xlabel("theta (deg)")
         if j % n_cols == 0:
@@ -580,7 +587,7 @@ def plot_loo_projection(err: np.ndarray, angles: np.ndarray, out_path: Path):
         extent=[angles[0] - 2.5, angles[-1] + 2.5, 0.5, err.shape[1] + 0.5],
         interpolation="nearest",
     )
-    ax1.set_xticks(angles)
+    ax1.set_xticks(REF_TICKS)
     ax1.set_yticks(r_axis)
     ax1.set_xlabel("theta excluido (deg)")
     ax1.set_ylabel("r (modos retenidos)")
@@ -641,12 +648,19 @@ def save_basis(pod: dict, angles: np.ndarray, probe_coords: np.ndarray,
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="ROM_POD: POD de snapshots CFD")
     p.add_argument(
-        "--angles", choices=["tpu11", "all24"], default="all24",
-        help="tpu11: solo 11 angulos TPU {0,5,...,50}; all24: todos los disponibles (default)",
+        "--angles",
+        choices=["base_ref", "base_kawai", "base_full", "tpu11", "all24"],
+        default="base_full",
+        help=(
+            "base_ref: {0,5,...,45} (10 ang, paso 5); "
+            "base_kawai: ref + densificado zona vortice [10-30]; "
+            "base_full: todos disponibles <=45 grados; "
+            "tpu11/all24: legacy"
+        ),
     )
     p.add_argument(
-        "--suffix", default="",
-        help="Sufijo para ficheros de salida, p.ej. _11ang (default: sin sufijo)",
+        "--outdir", default="outputs/base_full",
+        help="Directorio de salida relativo a Programacion/ (default: outputs/base_full)",
     )
     return p.parse_args()
 
@@ -656,16 +670,24 @@ TPU11_SET = {0.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0, 50.0}
 
 def main():
     args   = _parse_args()
-    suffix = args.suffix
+    outdir = SCRIPT_DIR / args.outdir
+    outdir.mkdir(parents=True, exist_ok=True)
 
-    # Filtro de angulos
-    if args.angles == "tpu11":
+    if args.angles == "base_ref":
+        angles_use = [a for a in ANGLES if a in BASE_REF]
+    elif args.angles == "base_kawai":
+        angles_use = [a for a in ANGLES if a in BASE_KAWAI]
+    elif args.angles == "base_full":
+        angles_use = [a for a in ANGLES if a <= MAX_THETA]
+    elif args.angles == "tpu11":
         angles_use = [a for a in ANGLES if a in TPU11_SET]
-        print(f"\n  Modo tpu11: {len(angles_use)} angulos = {angles_use}")
     else:
         angles_use = ANGLES
 
-    out_npz = SCRIPT_DIR / f"ROM_POD_basis{suffix}.npz"
+    print(f"\n  Set '{args.angles}': {len(angles_use)} angulos")
+    print(f"  Salida: {outdir.relative_to(SCRIPT_DIR)}")
+
+    out_npz = outdir / "ROM_POD_basis.npz"
 
     # 1. Lectura directa de OpenFOAM
     data         = load_openfoam_snapshots(angles_use)
@@ -685,17 +707,18 @@ def main():
     print(f"{'='*65}")
     print("  Generando figuras...")
     print(f"{'='*65}")
-    plot_snapshot_overview(X, angles,      SCRIPT_DIR / f"snapshot_overview{suffix}.png")
-    plot_singular_spectrum(pod,            SCRIPT_DIR / f"POD_singular_spectrum{suffix}.png")
-    plot_modal_coefficients(pod, angles,   SCRIPT_DIR / f"POD_modal_coefficients{suffix}.png")
-    plot_modes_unfolded(pod, probe_coords, SCRIPT_DIR / f"POD_modes_unfolded{suffix}.png")
-    plot_loo_projection(err_proj, angles,  SCRIPT_DIR / f"POD_loo_projection_error{suffix}.png")
+    plot_snapshot_overview(X, angles,      outdir / "snapshot_overview.png")
+    plot_singular_spectrum(pod,            outdir / "POD_singular_spectrum.png")
+    plot_modal_coefficients(pod, angles,   outdir / "POD_modal_coefficients.png")
+    plot_modes_unfolded(pod, probe_coords, outdir / "POD_modes_unfolded.png")
+    plot_loo_projection(err_proj, angles,  outdir / "POD_loo_projection_error.png")
 
     # 5. Guardado
     save_basis(pod, angles, probe_coords, out_npz)
 
     print(f"\n{'='*65}")
-    print(f"  POD completada ({args.angles}, suffix='{suffix}'). Siguiente paso: ROM_GPR.py")
+    print(f"  POD completada: set='{args.angles}', N={len(angles_use)}")
+    print(f"  Siguiente: python ROM_GPR.py --outdir {args.outdir}")
     print(f"{'='*65}\n")
 
 

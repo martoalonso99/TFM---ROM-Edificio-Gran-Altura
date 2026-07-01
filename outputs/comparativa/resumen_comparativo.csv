@@ -1,0 +1,4 @@
+base,n_angulos,r_star,kernel,LOO_medio,n_test_kawai,err_test_kawai,n_test_fuera,err_test_fuera
+base_ref,10,8,Matern32,0.1714,7,0.1392,5,0.0423
+base_kawai,17,10,Matern32,0.1384,0,nan,5,0.0383
+base_full,22,12,Matern52,0.0966,0,nan,0,nan

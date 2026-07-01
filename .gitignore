@@ -1,6 +1,8 @@
 # Outputs generados por los scripts (no versionar)
 *.npz
 *.png
+outputs/**/*.npz
+outputs/**/*.png
 
 # Python
 __pycache__/
