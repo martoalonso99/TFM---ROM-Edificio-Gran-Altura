@@ -29,6 +29,7 @@ Autor: Martín Rodríguez García
 
 from __future__ import annotations
 
+import argparse
 import re
 from pathlib import Path
 
@@ -146,7 +147,7 @@ def _parse_probe_file(fpath: Path) -> tuple[np.ndarray, float, np.ndarray]:
     return coords, float(raw[0]), raw[1 : N_PROBES + 1]
 
 
-def load_openfoam_snapshots() -> dict:
+def load_openfoam_snapshots(angles: list | None = None) -> dict:
     """
     Lee los ficheros p de OpenFOAM para los casos ROM y construye
     la matriz de snapshots Cp[400 x N].
@@ -156,7 +157,9 @@ def load_openfoam_snapshots() -> dict:
 
     Replica la logica de ROM_PostProc_Batch.m (MATLAB).
     """
-    N_ANG        = len(ANGLES)
+    if angles is None:
+        angles = ANGLES
+    N_ANG        = len(angles)
     Cp_matrix    = np.zeros((N_PROBES, N_ANG))
     probe_coords = np.zeros((N_PROBES, 3, N_ANG))
 
@@ -166,7 +169,7 @@ def load_openfoam_snapshots() -> dict:
     print(f"  {'Caso':<16} {'t_final':>8} {'Cp_max':>8} {'Cp_min':>8} {'Cp_medio':>10}")
     print(f"  {'-'*54}")
 
-    for i, theta in enumerate(ANGLES):
+    for i, theta in enumerate(angles):
         tag   = f"theta_{fmt_angle(theta)}"
         fpath = (DATA_DIR / f"ROMCase_{tag}"
                  / "postProcessing" / "probes_buildingPressure" / "0" / "p")
@@ -195,7 +198,7 @@ def load_openfoam_snapshots() -> dict:
 
     return {
         "X":            Cp_matrix,
-        "angles":       np.array(ANGLES, dtype=float),
+        "angles":       np.array(angles, dtype=float),
         "probe_coords": probe_coords,
         "Uref":         UREF,
         "q_ref":        Q_REF,
@@ -635,9 +638,37 @@ def save_basis(pod: dict, angles: np.ndarray, probe_coords: np.ndarray,
 #  MAIN
 # =======================================================================
 
+def _parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(description="ROM_POD: POD de snapshots CFD")
+    p.add_argument(
+        "--angles", choices=["tpu11", "all24"], default="all24",
+        help="tpu11: solo 11 angulos TPU {0,5,...,50}; all24: todos los disponibles (default)",
+    )
+    p.add_argument(
+        "--suffix", default="",
+        help="Sufijo para ficheros de salida, p.ej. _11ang (default: sin sufijo)",
+    )
+    return p.parse_args()
+
+
+TPU11_SET = {0.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0, 50.0}
+
+
 def main():
+    args   = _parse_args()
+    suffix = args.suffix
+
+    # Filtro de angulos
+    if args.angles == "tpu11":
+        angles_use = [a for a in ANGLES if a in TPU11_SET]
+        print(f"\n  Modo tpu11: {len(angles_use)} angulos = {angles_use}")
+    else:
+        angles_use = ANGLES
+
+    out_npz = SCRIPT_DIR / f"ROM_POD_basis{suffix}.npz"
+
     # 1. Lectura directa de OpenFOAM
-    data         = load_openfoam_snapshots()
+    data         = load_openfoam_snapshots(angles_use)
     X            = data["X"]
     angles       = data["angles"]
     probe_coords = data["probe_coords"]
@@ -654,17 +685,17 @@ def main():
     print(f"{'='*65}")
     print("  Generando figuras...")
     print(f"{'='*65}")
-    plot_snapshot_overview(X, angles,      SCRIPT_DIR / "snapshot_overview.png")
-    plot_singular_spectrum(pod,            SCRIPT_DIR / "POD_singular_spectrum.png")
-    plot_modal_coefficients(pod, angles,   SCRIPT_DIR / "POD_modal_coefficients.png")
-    plot_modes_unfolded(pod, probe_coords, SCRIPT_DIR / "POD_modes_unfolded.png")
-    plot_loo_projection(err_proj, angles,  SCRIPT_DIR / "POD_loo_projection_error.png")
+    plot_snapshot_overview(X, angles,      SCRIPT_DIR / f"snapshot_overview{suffix}.png")
+    plot_singular_spectrum(pod,            SCRIPT_DIR / f"POD_singular_spectrum{suffix}.png")
+    plot_modal_coefficients(pod, angles,   SCRIPT_DIR / f"POD_modal_coefficients{suffix}.png")
+    plot_modes_unfolded(pod, probe_coords, SCRIPT_DIR / f"POD_modes_unfolded{suffix}.png")
+    plot_loo_projection(err_proj, angles,  SCRIPT_DIR / f"POD_loo_projection_error{suffix}.png")
 
     # 5. Guardado
-    save_basis(pod, angles, probe_coords, OUT_NPZ)
+    save_basis(pod, angles, probe_coords, out_npz)
 
     print(f"\n{'='*65}")
-    print("  POD completada. Siguiente paso: ROM_GPR.py")
+    print(f"  POD completada ({args.angles}, suffix='{suffix}'). Siguiente paso: ROM_GPR.py")
     print(f"{'='*65}\n")
 
 

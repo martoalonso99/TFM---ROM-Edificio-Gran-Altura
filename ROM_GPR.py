@@ -36,6 +36,7 @@ Autor: TFM - Marto | Mayo 2026
 
 from __future__ import annotations
 
+import argparse
 import warnings
 from pathlib import Path
 
@@ -624,9 +625,24 @@ def save_results(
 #  MAIN
 # =======================================================================
 
+def _parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(description="ROM_GPR: GPR por modo POD")
+    p.add_argument(
+        "--suffix", default="",
+        help="Sufijo para ficheros NPZ de E/S, p.ej. _11ang (default: sin sufijo)",
+    )
+    return p.parse_args()
+
+
 def main():
+    args   = _parse_args()
+    suffix = args.suffix
+
+    pod_npz = SCRIPT_DIR / f"ROM_POD_basis{suffix}.npz"
+    out_npz = SCRIPT_DIR / f"ROM_GPR_results{suffix}.npz"
+
     # 0. Carga
-    pod    = load_pod_basis(POD_NPZ)
+    pod    = load_pod_basis(pod_npz)
     # X_centered = Phi @ A  (A ya incluye los valores singulares: A = diag(sigma) @ Vt)
     X_full = pod["Phi"] @ pod["A"] + pod["mean"][:, None]   # (N_probes, N_snap)
     angles = pod["angles"]
@@ -641,6 +657,7 @@ def main():
     r_compare = int(np.clip(r_compare, 3, r_max))
 
     print(f"\n  Parametros calculados automaticamente:")
+    print(f"    suffix    = '{suffix}'")
     print(f"    N_snap    = {N_snap}")
     print(f"    r_max     = {r_max}  (rango efectivo fold LOO = N-2)")
     print(f"    r_compare = {r_compare}  (energia acumulada >= 99.5%)\n")
@@ -661,35 +678,35 @@ def main():
 
     plot_kernel_comparison(
         kernel_results, r_compare,
-        SCRIPT_DIR / "GPR_kernel_comparison.png",
+        SCRIPT_DIR / f"GPR_kernel_comparison{suffix}.png",
     )
     plot_r_sweep(
         sweep, best_kernel, r_star, angles,
-        SCRIPT_DIR / "GPR_r_sweep.png",
+        SCRIPT_DIR / f"GPR_r_sweep{suffix}.png",
     )
     plot_gpr_mode_fits(
         pod, r_star, best_kernel,
         mu_dense, std_dense, theta_dense,
-        SCRIPT_DIR / "GPR_mode_fits.png",
+        SCRIPT_DIR / f"GPR_mode_fits{suffix}.png",
     )
     plot_loo_scatter(
         X_full, angles,
         sweep[r_star]["cp_pred_loo"], r_star, best_kernel,
-        SCRIPT_DIR / "GPR_loo_scatter.png",
+        SCRIPT_DIR / f"GPR_loo_scatter{suffix}.png",
     )
 
     # 5. Guardado
     save_results(
         pod, best_kernel, r_star, sweep,
         mu_dense, std_dense, theta_dense,
-        OUT_NPZ,
+        out_npz,
     )
 
     print(f"\n{'='*65}")
-    print(f"  GPR completado.")
+    print(f"  GPR completado (suffix='{suffix}').")
     print(f"  Mejor kernel : {best_kernel}")
     print(f"  r*           : {r_star}")
-    print(f"  Siguiente paso: ROM_validation_TPU.py")
+    print(f"  Siguiente paso: ROM_test_intermediate.py  o  ROM_validation_TPU.py")
     print(f"{'='*65}\n")
 
 
