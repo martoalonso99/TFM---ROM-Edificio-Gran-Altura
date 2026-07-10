@@ -35,9 +35,10 @@ OUT_DIR      = SCRIPT_DIR / "outputs" / "comparativa"
 VORTEX_RANGE = (10.0, 30.0)
 
 BASES = [
-    ("base_ref",   "#1f4e79", "o", "Base ref (10 ang, paso 5°)"),
-    ("base_kawai", "#d62728", "s", "Base Kawai (17 ang, ref + zona [10-30°])"),
-    ("base_full",  "#2ca02c", "^", "Base full (22 ang, paso ~2°)"),
+    ("base_ref",    "#1f4e79", "o", "Base ref (10 ang, paso 5°)"),
+    ("base_kawai",  "#d62728", "s", "Base Kawai (17 ang, ref + zona [10-30°])"),
+    ("base_kawai2", "#ff7f0e", "D", "Base Kawai2 (22 ang, paso 1.25° en zona)"),
+    ("base_full",   "#2ca02c", "^", "Base full (22 ang, paso ~2.5°)"),
 ]
 
 
@@ -154,7 +155,16 @@ def plot_comparativa(base_results: dict, out_path: Path):
         errs   = [test_res[t]["err_rel"] for t in thetas]
         loo    = bd["loo"]
 
-        ax.plot(thetas, errs, f"-", color=color, lw=1.3, alpha=0.6)
+        # Conectar solo test consecutivos: un hueco >10 deg significa que ahi
+        # no hay medida (los angulos estan en training) y la linea enganharia
+        seg_x, seg_y = [thetas[0]], [errs[0]]
+        for x, y in zip(thetas[1:], errs[1:]):
+            if x - seg_x[-1] > 10.0:
+                ax.plot(seg_x, seg_y, "-", color=color, lw=1.3, alpha=0.6)
+                seg_x, seg_y = [], []
+            seg_x.append(x)
+            seg_y.append(y)
+        ax.plot(seg_x, seg_y, "-", color=color, lw=1.3, alpha=0.6)
         ax.scatter(thetas, errs, marker=marker, s=70, color=color, zorder=5,
                    label=f"{label} | LOO={loo:.3f}")
 
@@ -170,7 +180,7 @@ def plot_comparativa(base_results: dict, out_path: Path):
         fontsize=10,
     )
     ax.set_title(
-        "Comparativa de muestreo: base_ref vs base_kawai vs base_full\n"
+        "Comparativa de estrategias de muestreo (test externo por base)\n"
         "(Muestreo adaptativo: densificar solo la zona del vortice de Kawai)",
         fontweight="bold", fontsize=11,
     )

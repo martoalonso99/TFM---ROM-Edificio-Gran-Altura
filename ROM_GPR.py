@@ -568,7 +568,7 @@ def plot_loo_scatter(
         f"Scatter LOO: Cp_CFD vs Cp_ROM  (r*={r_star}, kernel={best_kernel})",
         fontweight="bold",
     )
-    ax.legend(fontsize=9)
+    ax.legend(fontsize=9, loc="lower right")
     ax.set_aspect("equal")
     ax.grid(True, alpha=0.25)
 

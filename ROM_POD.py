@@ -95,6 +95,12 @@ MAX_THETA = 45.0                                        # rango fundamental secc
 
 BASE_REF   = {0.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0}
 BASE_KAWAI = BASE_REF | {12.5, 17.5, 22.5, 23.75, 26.25, 27.5, 28.75}
+# Nivel 3 de densidad: completa el paso 1.25 en toda la zona [10-30]
+# (mismo N=22 que base_full22 pero distribucion adaptativa)
+BASE_KAWAI2 = BASE_KAWAI | {11.25, 13.75, 16.25, 18.75, 21.25}
+# Set congelado de los 22 angulos a paso ~2.5 (antes "base_full"); base_full
+# sigue siendo dinamica (todos los disponibles <=45) y crecera con nuevos casos
+BASE_FULL22 = BASE_KAWAI | {2.5, 7.5, 32.5, 37.5, 42.5}
 # BASE_FULL: todos los angulos descubiertos <= MAX_THETA (calculado en main)
 
 
@@ -567,6 +573,9 @@ def plot_modes_unfolded(pod: dict, probe_coords: np.ndarray, out_path: Path,
             if i_row == n_rows - 1:
                 ax.set_xlabel(f["ulabel"], fontsize=9)
             ax.set_aspect("equal", adjustable="box")
+            # Paneles muy estrechos (aspecto 1:4): solo 3 ticks rotados caben
+            ax.set_xticks([-0.04, 0.0, 0.04])
+            ax.tick_params(axis="x", labelsize=7, rotation=45)
 
         fig.colorbar(sc, ax=axes[i_row, :].tolist(), shrink=0.85, pad=0.01
                      ).ax.tick_params(labelsize=8)
@@ -649,12 +658,15 @@ def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="ROM_POD: POD de snapshots CFD")
     p.add_argument(
         "--angles",
-        choices=["base_ref", "base_kawai", "base_full", "tpu11", "all24"],
+        choices=["base_ref", "base_kawai", "base_kawai2", "base_full22",
+                 "base_full", "tpu11", "all24"],
         default="base_full",
         help=(
             "base_ref: {0,5,...,45} (10 ang, paso 5); "
             "base_kawai: ref + densificado zona vortice [10-30]; "
-            "base_full: todos disponibles <=45 grados; "
+            "base_kawai2: kawai + paso 1.25 en toda la zona (N=22); "
+            "base_full22: los 22 angulos a paso ~2.5 (set congelado); "
+            "base_full: todos disponibles <=45 grados (dinamica); "
             "tpu11/all24: legacy"
         ),
     )
@@ -677,6 +689,10 @@ def main():
         angles_use = [a for a in ANGLES if a in BASE_REF]
     elif args.angles == "base_kawai":
         angles_use = [a for a in ANGLES if a in BASE_KAWAI]
+    elif args.angles == "base_kawai2":
+        angles_use = [a for a in ANGLES if a in BASE_KAWAI2]
+    elif args.angles == "base_full22":
+        angles_use = [a for a in ANGLES if a in BASE_FULL22]
     elif args.angles == "base_full":
         angles_use = [a for a in ANGLES if a <= MAX_THETA]
     elif args.angles == "tpu11":

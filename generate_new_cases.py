@@ -23,9 +23,11 @@ Ordenacion de probes (body-fixed, consistente con casos existentes):
   Cara 4 (lateral-,   y=-0.0501): cols x in [-0.04,-0.02,0,+0.02,+0.04], filas z
 
 Uso:
-    python generate_new_cases.py
+    python generate_new_cases.py                          # angulos por defecto
+    python generate_new_cases.py --angles 11.25 13.75 ... # angulos arbitrarios
 """
 
+import argparse
 import math
 import os
 import struct
@@ -229,18 +231,25 @@ def verify_stl(theta_deg: float) -> tuple:
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Genera ZIPs de casos OpenFOAM rotados")
+    parser.add_argument(
+        "--angles", nargs="+", type=float, default=NEW_ANGLES,
+        help=f"Angulos a generar en grados (default: {NEW_ANGLES})",
+    )
+    args = parser.parse_args()
+
     template_dir = DATA_DIR / TEMPLATE_CASE
     output_dir = DATA_DIR
 
     print(f"Plantilla : {template_dir}")
     print(f"Salida    : {output_dir}")
-    print(f"Angulos   : {NEW_ANGLES}")
+    print(f"Angulos   : {args.angles}")
     print()
 
     if not template_dir.exists():
         raise FileNotFoundError(f"Caso plantilla no encontrado: {template_dir}")
 
-    for theta in NEW_ANGLES:
+    for theta in args.angles:
         print(f"theta = {theta}°  (carpeta: ROMCase_theta_{fmt_angle(theta)})")
         zip_path = generate_case_zip(theta, template_dir, output_dir)
 
