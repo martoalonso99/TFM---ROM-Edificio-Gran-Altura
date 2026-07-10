@@ -51,11 +51,25 @@ Q_REF     = 0.5 * UREF ** 2      # m^2/s^2 - presion dinamica cinematica
 N_PROBES  = 400
 
 
-def discover_angles(data_dir: Path) -> list[float]:
+# Holdout pre-registrado para la comparativa justa entre disenos muestrales
+# (ver BRIEF_holdout.md). Peine de paso 5 desplazado 3.125 respecto al grid
+# de entrenamiento: multiplos impares de 0.625 -> nunca coinciden con el
+# reticulo k*1.25 donde viven todos los angulos de entrenamiento.
+# Estos angulos NO entran en ninguna base ROM ni en discover_angles();
+# solo los usa la evaluacion dedicada (ROM_holdout_eval.py).
+HOLDOUT_SET = {3.125, 8.125, 13.125, 18.125, 23.125, 28.125,
+               33.125, 38.125, 43.125}
+
+
+def discover_angles(data_dir: Path, include_holdout: bool = False) -> list[float]:
     """
     Descubre los angulos ROM escaneando carpetas ROMCase_theta_* en data_dir.
     Soporta nombres enteros (theta_10) y decimales (theta_2p5, 'p' = punto decimal).
     Devuelve la lista ordenada de angulos (float) encontrados.
+
+    Los angulos de HOLDOUT_SET se excluyen salvo include_holdout=True: asi
+    ningun consumidor (POD, test externo, comparativa) puede absorberlos
+    accidentalmente como entrenamiento o mezclarlos con los tests existentes.
     """
     pattern = re.compile(r'^ROMCase_theta_([\dp]+)$')
     angles = []
@@ -64,6 +78,8 @@ def discover_angles(data_dir: Path) -> list[float]:
             m = pattern.match(entry.name)
             if m:
                 angles.append(float(m.group(1).replace('p', '.')))
+    if not include_holdout:
+        angles = [a for a in angles if a not in HOLDOUT_SET]
     if not angles:
         raise FileNotFoundError(
             f"No se encontraron carpetas ROMCase_theta_* en {data_dir}"
