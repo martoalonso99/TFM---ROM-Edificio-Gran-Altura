@@ -329,6 +329,77 @@ Folds LOO más difíciles de ambas bases N=22:
 
 Con paso 1.25° el error en 22.5–23.75° apenas baja respecto al paso 2.5°. En esa franja los coeficientes modales del vórtice tienen su variación más rápida (el pico de succión se desplaza y reorganiza) y la interpolación GPR es intrínsecamente difícil: es el **límite de la parametrización actual**, no un déficit de muestreo. Documentable como limitación esperada del método (consistente con la física del vórtice de Kawai).
 
+**Nota importante**: §7.4 usa el fold LOO de base_kawai2 como sustituto del test externo (porque sus propios ángulos de entrenamiento no dejan huecos libres en la zona). §7.3 ya advierte que esto es una aproximación, no una medida externa real. La sección 7.6 resuelve esta limitación con un holdout pre-registrado, común a las cuatro bases, y **matiza el veredicto de 7.4**.
+
+---
+
+## 7.6 Holdout pre-registrado: comparativa ciega (BRIEF_holdout.md)
+
+Para eliminar la dependencia de folds LOO (§7.3–7.5 usan aproximaciones distintas para cada base, no una medida común), se pre-registró un holdout de **9 ángulos que ninguna base ha visto jamás en entrenamiento**, con métricas y protocolo fijados *antes* de simular (ver `BRIEF_holdout.md`):
+
+$$T = \{3.125°, 8.125°, 13.125°, 18.125°, 23.125°, 28.125°, 33.125°, 38.125°, 43.125°\}$$
+
+Peine uniforme de paso 5° desplazado 3.125° — múltiplos impares de 0.625°, por construcción fuera del retículo $k \cdot 1.25°$ donde viven los 27 ángulos de entrenamiento. Estratificación: 2 puntos fuera-baja, 4 en zona [10°,30°], 3 fuera-alta.
+
+### 7.6.1 Suelo de ruido CFD
+
+Antes de interpretar diferencias entre bases, se cuantifica el ruido intrínseco del pipeline CFD (malla rotada, cobertura de capas variable) usando los pares físicamente equivalentes por simetría $\theta \leftrightarrow 90°-\theta$: (40°, 50°) y (42.5°, 47.5°). La transformación de simetría correcta se descubre empíricamente probando las 8 transformaciones del grupo diédrico D4 sobre el layout de sondas y eligiendo la que minimiza la discrepancia:
+
+![Suelo de ruido](outputs/holdout/symmetry_noise_fields.png)
+
+La transformación ganadora (reflexión antidiagonal, $(x,y) \to (-y,-x)$) reduce el RMS de 0.07–0.12 (con cualquier otra transformación, o sin transformar) a **0.0003–0.0005** — validación cruzada de que la simetría C4+reflexión del pipeline CFD es correcta con precisión de 3 órdenes de magnitud.
+
+$$\text{Suelo de ruido} = \text{RMS} \approx 0.0004 \text{ (unidades de } C_p\text{)}$$
+
+Diferencias de RMSE entre bases por debajo de este valor no son atribuibles al diseño muestral.
+
+### 7.6.2 Resultados: media sobre los 9 ángulos de holdout
+
+![Error relativo holdout](outputs/holdout/error_vs_theta_holdout_err_rel_common.png)
+
+![Error en Cp_min holdout](outputs/holdout/error_vs_theta_holdout_err_cpmin.png)
+
+| Métrica | Estrato | base_ref | base_kawai | base_kawai2 | base_full22 |
+|---|---|---|---|---|---|
+| **RMSE** (abs., suelo=0.0004) | Global | 0.0139 | 0.0115 | 0.0116 | **0.0107** |
+| | Zona [10–30°] | 0.0179 | 0.0124 | **0.0116** | 0.0132 |
+| | Fuera | 0.0107 | 0.0108 | 0.0116 | **0.0086** |
+| **Err. relativo** (denom. común) | Global | 0.0914 | 0.0768 | 0.0767 | **0.0743** |
+| | Zona | 0.1473 | 0.1138 | **0.1088** | 0.1175 |
+| | Fuera | 0.0467 | 0.0473 | 0.0511 | **0.0397** |
+| **Err. en $C_{p,min}$** | Global | 0.0380 | 0.0257 | **0.0243** | 0.0333 |
+| | Zona | 0.0630 | 0.0421 | **0.0305** | 0.0461 |
+| | Fuera | 0.0180 | 0.0125 | 0.0194 | **0.0230**† |
+
+† En "fuera", base_full22 pierde en $C_{p,min}$ pese a ganar en RMSE/err. relativo — dominado por un solo punto (θ=8.125°, ver tabla de detalle).
+
+**El resultado clave, y la razón de ser del pre-registro**: la comparación ciega **no repite el veredicto de §7.4**. Allí, usando el fold LOO de base_kawai2 como sustituto del test externo, base_full22 ganaba con claridad dentro de la zona (8.8% vs 11.7%). Aquí, con el mismo test externo real para ambas, **base_kawai2 tiene el menor RMSE y el menor error relativo dentro de la zona de las cuatro bases**, y domina con claridad en la métrica físicamente más relevante — el error en el pico de succión ($C_{p,min}$) — tanto en zona (0.031 vs 0.046 de base_full22) como globalmente (0.024, mejor que las otras tres).
+
+Esto confirma exactamente la advertencia de §7.3: el fold LOO de un diseño con huecos irregulares no es intercambiable con un test externo real. La comparación pre-registrada es la autoritativa; **§7.4 se mantiene documentado por su valor pedagógico (ilustra el sesgo), pero su conclusión "el uniforme gana en zona" queda revertida por este resultado.**
+
+### 7.6.3 Comparaciones pareadas (test de signos, n=9)
+
+| Par | Métrica | Resultado | p (mejor unilateral) |
+|---|---|---|---|
+| base_kawai vs base_kawai2 | err. relativo | kawai gana 7/9 | 0.090 |
+| base_ref vs base_full22 | RMSE | full gana 6/9 | 0.254 |
+| resto de pares | todas | 4/9–5/9 o 5/9–4/9 | ≥0.50 |
+
+**Ninguna comparación pareada alcanza significancia convencional** ($p<0.05$) con $n=9$ — la potencia estadística es baja, como se anticipó en el pre-registro. La diferencia más cercana (kawai vs kawai2, $p=0.09$) es paradójica: kawai2 tiene mejor *media* que kawai en zona/Cp_min, pero kawai gana en más puntos individuales del error relativo — kawai2 pierde por márgenes pequeños en la mayoría de ángulos pero gana por márgenes grandes en unos pocos (13.125° y 18.125°, ver `outputs/holdout/holdout_results.csv`). El test de signos, al ignorar magnitud, no captura esto: **hay que leer medias y test de signos juntos, nunca uno solo.**
+
+Comparando magnitudes contra el suelo de ruido (0.0004): la diferencia global kawai/kawai2 en RMSE (0.0115 vs 0.0116) es **menor que el suelo de ruido** — indistinguibles. La diferencia kawai2/full22 en zona (0.0116 vs 0.0132) es ~4× el suelo — real. base_ref vs cualquier otra base (diferencias ≥0.003) está claramente por encima del ruido en todos los casos.
+
+### 7.6.4 Interpretación para el diseño del ROM final
+
+No hay una base que domine en las tres métricas y los dos estratos simultáneamente. La elección depende de qué prioriza el ROM:
+
+- **Si el objetivo es error medio global mínimo** (uso genérico del ROM en todo el rango): base_full22 gana en RMSE y error relativo global, y es marginalmente más barata (976 vs 990 CPU-h).
+- **Si el objetivo es la carga de diseño estructural** (pico de succión, relevante para cladding y elementos de fachada en la zona de vórtice): base_kawai2 es la mejor opción, con un margen claro sobre el suelo de ruido.
+
+Dado que el TFM enmarca el problema en términos de cargas de viento sobre edificio alto (§ Objetivo), el error en $C_{p,min}$ tiene relevancia física directa que el error relativo agregado no captura. Esto se traslada a la recomendación final en §9.
+
+Salidas: `outputs/holdout/holdout_results.csv` (detalle por ángulo), `holdout_summary.csv` (medias), `holdout_pairwise.csv` (test de signos), `symmetry_noise.csv`.
+
 ---
 
 ## 8. Coste computacional normalizado
@@ -372,19 +443,21 @@ Salidas: `outputs/comparativa/cost_per_case.csv`, `cost_resumen.csv`, `cost_vs_e
 
 2. **Densificar la zona a 2.5° es la inversión más rentable**: base_kawai (+337 CPU-h sobre base_ref) reduce el error en zona de 12.2% a 9.5% y el LOO un 19%, sin degradar el comportamiento fuera.
 
-3. **Densificar más allá de 2.5° no paga**: base_kawai2 (paso 1.25° en zona) pierde contra base_full22 a igual presupuesto tanto en LOO comparable como en el head-to-head a geometría igualada (11.7% vs 8.8% en zona). La cobertura uniforme 2.5° fuera de la zona enriquece la base POD global más de lo que aporta la densidad extra dentro.
+3. **El head-to-head basado en LOO (§7.4) favorecía artificialmente al diseño uniforme**: bajo esa aproximación, base_kawai2 perdía contra base_full22 en zona (11.7% vs 8.8%). El **holdout pre-registrado y ciego (§7.6)**, con el mismo test externo real para las cuatro bases, revierte esta conclusión: base_kawai2 tiene el menor RMSE y error relativo dentro de la zona, y domina claramente en error de $C_{p,min}$ (pico de succión) tanto en zona como globalmente. Esta es la comparación autoritativa; **§7.4 se documenta por su valor pedagógico** (ilustra por qué el pre-registro de §7.3 era necesario), no como conclusión final.
 
-4. **El error residual en θ ≈ 22.5–24° es irreducible por muestreo** con esta parametrización: persiste (~0.25–0.32 en fold LOO) con paso 1.25°. Es el punto de variación más rápida de los coeficientes modales del vórtice y constituye la limitación documentable del método POD+GPR en este problema.
+4. **El error residual en θ ≈ 22.5–24° es irreducible por muestreo** con esta parametrización: persiste (~0.25–0.32 en fold LOO, y también en el holdout ciego en θ=23.125° — err. relativo ≈0.15–0.19 en las cuatro bases por igual) con paso 1.25°. Es el punto de variación más rápida de los coeficientes modales del vórtice y constituye la limitación documentable del método POD+GPR en este problema, **no un déficit de ninguna estrategia de muestreo en particular** (las cuatro bases fallan de forma similar ahí).
 
 5. **El kernel óptimo depende del diseño muestral**: Matérn 3/2 en todas las bases salvo base_full22 (Matérn 5/2) — solo el muestreo uniforme y denso soporta la hipótesis de mayor suavidad sin sobreajuste.
 
 6. **El cuello de botella es siempre la interpolación GPR**, no el truncamiento POD: en las cuatro bases $\varepsilon^{interp} > \varepsilon^{proj}$ en $r^*$. Añadir modos más allá de $r^*$ no reduce el error; añadir snapshots sí.
 
-7. **Diseño recomendado para el ROM final**: muestreo uniforme a paso 2.5° (base_full22, LOO 9.7%, ~976 CPU-h), con la advertencia de precisión reducida en 16–24°. La **sensorización óptima** (siguiente fase) se aplica sobre su base POD ($r^*=12$, $\Phi \in \mathbb{R}^{400\times12}$).
+7. **No hay una base que domine todas las métricas** (§7.6.4): base_full22 minimiza el error medio global (y es ligeramente más barata); base_kawai2 minimiza el error en el pico de succión, la cantidad físicamente relevante para cargas de diseño en la zona de vórtice. **Diseño recomendado**: si el TFM prioriza precisión general del ROM, base_full22 (LOO 9.7%, ~976 CPU-h); si prioriza fidelidad de cargas estructurales en la zona crítica, base_kawai2. Ninguna comparación pareada alcanza significancia estadística convencional con n=9 (§7.6.3) — la elección debe justificarse por relevancia física, no solo por el promedio agregado. La **sensorización óptima** (siguiente fase) se aplica sobre la base POD de la opción elegida.
 
 8. **Normalización de coste**: con casos ejecutados en configuraciones heterogéneas (10/20 cores, ejecución exclusiva o concurrente), la comparación justa exige normalizar a CPU-h equivalentes (aquí: eficiencia paralela medida 0.733 y corrección de contención por tasa CPU/celda/iteración).
+
+9. **El suelo de ruido del pipeline CFD es muy bajo** (RMS ≈ 0.0004 en unidades de $C_p$, vía pares simétricos θ↔90°-θ, §7.6.1): confirma que la simetría C4+reflexión del pipeline es correcta con precisión de 3 órdenes de magnitud, y que las diferencias entre bases documentadas aquí (salvo kawai/kawai2 a nivel global) son señal real, no artefacto de malla.
 
 ---
 
 *Pipeline ejecutado en: `Programacion/` — rama git `rom-11-tpu`*
-*Actualizado: 2026-07-10 (incluye base_kawai2 y análisis de coste)*
+*Actualizado: 2026-07-15 (incluye holdout pre-registrado §7.6 y suelo de ruido CFD)*

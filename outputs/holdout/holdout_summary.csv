@@ -1,0 +1,13 @@
+base,metric,mean_global,mean_zona,mean_fuera
+base_ref,rmse,0.01389,0.01793,0.01066
+base_ref,err_rel_common,0.09138,0.14727,0.04667
+base_ref,err_cpmin,0.03796,0.06297,0.01796
+base_kawai,rmse,0.01152,0.01243,0.01080
+base_kawai,err_rel_common,0.07684,0.11379,0.04728
+base_kawai,err_cpmin,0.02567,0.04210,0.01252
+base_kawai2,rmse,0.01162,0.01164,0.01160
+base_kawai2,err_rel_common,0.07671,0.10877,0.05106
+base_kawai2,err_cpmin,0.02431,0.03050,0.01936
+base_full,rmse,0.01066,0.01321,0.00862
+base_full,err_rel_common,0.07429,0.11748,0.03974
+base_full,err_cpmin,0.03331,0.04614,0.02304
