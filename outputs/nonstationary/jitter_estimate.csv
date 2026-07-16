@@ -1,0 +1,5 @@
+quantity,value
+jitter_symmetry_field_rms,0.000400
+interp_residual_zona,0.015806
+ratio_jitter_over_residual,0.025307
+rel_coeff_noise_energy_weighted,0.026710
