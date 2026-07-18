@@ -47,7 +47,7 @@ La **matriz de snapshots** es $X \in \mathbb{R}^{400 \times N}$ donde cada colum
 
 ### 3.1 Visión general de los snapshots
 
-![Snapshot overview base_ref](outputs/base_ref/snapshot_overview.png)
+![Snapshot overview base_ref](../outputs/base_ref/snapshot_overview.png)
 
 Observaciones:
 - A 0°: cara barlovento con $C_p \approx +0.97$, sotavento con succión $C_p \approx -0.5$
@@ -56,20 +56,20 @@ Observaciones:
 
 ### 3.2 POD
 
-![Espectro singular base_ref](outputs/base_ref/POD_singular_spectrum.png)
+![Espectro singular base_ref](../outputs/base_ref/POD_singular_spectrum.png)
 
 - Los primeros 4 modos capturan ≥99.5% de la energía
 - Modos 1–2: patrón global estancamiento + reflujo; modos 3–6: firma del vórtice cónico
 
-![Coeficientes modales base_ref](outputs/base_ref/POD_modal_coefficients.png)
+![Coeficientes modales base_ref](../outputs/base_ref/POD_modal_coefficients.png)
 
-![Modos POD desplegados base_ref](outputs/base_ref/POD_modes_unfolded.png)
+![Modos POD desplegados base_ref](../outputs/base_ref/POD_modes_unfolded.png)
 
-![Error LOO proyección base_ref](outputs/base_ref/POD_loo_projection_error.png)
+![Error LOO proyección base_ref](../outputs/base_ref/POD_loo_projection_error.png)
 
 ### 3.3 GPR
 
-![Comparación kernels base_ref](outputs/base_ref/GPR_kernel_comparison.png)
+![Comparación kernels base_ref](../outputs/base_ref/GPR_kernel_comparison.png)
 
 | Kernel | LOO medio (r=4) |
 |---|---|
@@ -78,20 +78,20 @@ Observaciones:
 | RatQuad | 0.2161 |
 | RBF | 0.2232 |
 
-![Sweep r base_ref](outputs/base_ref/GPR_r_sweep.png)
+![Sweep r base_ref](../outputs/base_ref/GPR_r_sweep.png)
 
 - **r\* = 8**, LOO = 0.1714 (proj 0.076 / interp 0.095)
 - El error de interpolación GPR supera al de proyección desde r=5: más modos no ayudan con 10 puntos
 
-![Ajuste GPR modos base_ref](outputs/base_ref/GPR_mode_fits.png)
+![Ajuste GPR modos base_ref](../outputs/base_ref/GPR_mode_fits.png)
 
-![Scatter LOO base_ref](outputs/base_ref/GPR_loo_scatter.png)
+![Scatter LOO base_ref](../outputs/base_ref/GPR_loo_scatter.png)
 
 ### 3.4 Test externo (17 ángulos intermedios)
 
 Con las 5 simulaciones nuevas del nivel 1.25°, base_ref se evalúa ahora en **17 ángulos** no vistos:
 
-![Error test externo base_ref](outputs/base_ref/GPR_error_vs_theta.png)
+![Error test externo base_ref](../outputs/base_ref/GPR_error_vs_theta.png)
 
 | θ (°) | Cp_min CFD | Cp_min ROM | err_rel |
 |---|---|---|---|
@@ -131,31 +131,31 @@ Estrategia adaptativa: añadir simulaciones **solo donde el error era alto**.
 
 ### 4.1 POD y GPR
 
-![Snapshot overview base_kawai](outputs/base_kawai/snapshot_overview.png)
+![Snapshot overview base_kawai](../outputs/base_kawai/snapshot_overview.png)
 
-![Espectro singular base_kawai](outputs/base_kawai/POD_singular_spectrum.png)
+![Espectro singular base_kawai](../outputs/base_kawai/POD_singular_spectrum.png)
 
-![Coeficientes modales base_kawai](outputs/base_kawai/POD_modal_coefficients.png)
+![Coeficientes modales base_kawai](../outputs/base_kawai/POD_modal_coefficients.png)
 
-![Modos POD desplegados base_kawai](outputs/base_kawai/POD_modes_unfolded.png)
+![Modos POD desplegados base_kawai](../outputs/base_kawai/POD_modes_unfolded.png)
 
-![Error LOO proyección base_kawai](outputs/base_kawai/POD_loo_projection_error.png)
+![Error LOO proyección base_kawai](../outputs/base_kawai/POD_loo_projection_error.png)
 
-![Comparación kernels base_kawai](outputs/base_kawai/GPR_kernel_comparison.png)
+![Comparación kernels base_kawai](../outputs/base_kawai/GPR_kernel_comparison.png)
 
-![Sweep r base_kawai](outputs/base_kawai/GPR_r_sweep.png)
+![Sweep r base_kawai](../outputs/base_kawai/GPR_r_sweep.png)
 
 - Kernel: **Matérn 3/2**; **r\* = 10**, LOO = 0.1384 (proj 0.052 / interp 0.086)
 
-![Ajuste GPR modos base_kawai](outputs/base_kawai/GPR_mode_fits.png)
+![Ajuste GPR modos base_kawai](../outputs/base_kawai/GPR_mode_fits.png)
 
-![Scatter LOO base_kawai](outputs/base_kawai/GPR_loo_scatter.png)
+![Scatter LOO base_kawai](../outputs/base_kawai/GPR_loo_scatter.png)
 
 ### 4.2 Test externo (10 ángulos)
 
 Con los 5 ángulos nuevos, base_kawai tiene ahora test **dentro** de la zona (los midpoints del paso 2.5°):
 
-![Error test externo base_kawai](outputs/base_kawai/GPR_error_vs_theta.png)
+![Error test externo base_kawai](../outputs/base_kawai/GPR_error_vs_theta.png)
 
 | θ (°) | err_rel | Zona |
 |---|---|---|
@@ -186,27 +186,27 @@ Con los 5 ángulos nuevos, base_kawai tiene ahora test **dentro** de la zona (lo
 
 ### 5.1 POD y GPR
 
-![Snapshot overview base_full](outputs/base_full/snapshot_overview.png)
+![Snapshot overview base_full](../outputs/base_full/snapshot_overview.png)
 
-![Espectro singular base_full](outputs/base_full/POD_singular_spectrum.png)
+![Espectro singular base_full](../outputs/base_full/POD_singular_spectrum.png)
 
-![Coeficientes modales base_full](outputs/base_full/POD_modal_coefficients.png)
+![Coeficientes modales base_full](../outputs/base_full/POD_modal_coefficients.png)
 
-![Modos POD desplegados base_full](outputs/base_full/POD_modes_unfolded.png)
+![Modos POD desplegados base_full](../outputs/base_full/POD_modes_unfolded.png)
 
-![Error LOO proyección base_full](outputs/base_full/POD_loo_projection_error.png)
+![Error LOO proyección base_full](../outputs/base_full/POD_loo_projection_error.png)
 
-![Comparación kernels base_full](outputs/base_full/GPR_kernel_comparison.png)
+![Comparación kernels base_full](../outputs/base_full/GPR_kernel_comparison.png)
 
 - Kernel: **Matérn 5/2** — único caso: con N=22 uniforme hay información para estimar una función más suave sin sobreajuste
 
-![Sweep r base_full](outputs/base_full/GPR_r_sweep.png)
+![Sweep r base_full](../outputs/base_full/GPR_r_sweep.png)
 
 - **r\* = 12**, LOO = 0.0966 (proj 0.038 / interp 0.059)
 
-![Ajuste GPR modos base_full](outputs/base_full/GPR_mode_fits.png)
+![Ajuste GPR modos base_full](../outputs/base_full/GPR_mode_fits.png)
 
-![Scatter LOO base_full](outputs/base_full/GPR_loo_scatter.png)
+![Scatter LOO base_full](../outputs/base_full/GPR_loo_scatter.png)
 
 ### 5.2 Test externo (5 ángulos, todos en zona)
 
@@ -232,29 +232,29 @@ Las 5 simulaciones nuevas se ejecutaron con la misma configuración V5 (malla ~7
 
 ### 6.1 POD y GPR
 
-![Snapshot overview base_kawai2](outputs/base_kawai2/snapshot_overview.png)
+![Snapshot overview base_kawai2](../outputs/base_kawai2/snapshot_overview.png)
 
-![Espectro singular base_kawai2](outputs/base_kawai2/POD_singular_spectrum.png)
+![Espectro singular base_kawai2](../outputs/base_kawai2/POD_singular_spectrum.png)
 
-![Coeficientes modales base_kawai2](outputs/base_kawai2/POD_modal_coefficients.png)
+![Coeficientes modales base_kawai2](../outputs/base_kawai2/POD_modal_coefficients.png)
 
-![Modos POD desplegados base_kawai2](outputs/base_kawai2/POD_modes_unfolded.png)
+![Modos POD desplegados base_kawai2](../outputs/base_kawai2/POD_modes_unfolded.png)
 
-![Error LOO proyección base_kawai2](outputs/base_kawai2/POD_loo_projection_error.png)
+![Error LOO proyección base_kawai2](../outputs/base_kawai2/POD_loo_projection_error.png)
 
-![Comparación kernels base_kawai2](outputs/base_kawai2/GPR_kernel_comparison.png)
+![Comparación kernels base_kawai2](../outputs/base_kawai2/GPR_kernel_comparison.png)
 
-![Sweep r base_kawai2](outputs/base_kawai2/GPR_r_sweep.png)
+![Sweep r base_kawai2](../outputs/base_kawai2/GPR_r_sweep.png)
 
 - Kernel: **Matérn 3/2**; **r\* = 10**, LOO = 0.1251 (proj 0.049 / interp 0.076)
 
-![Ajuste GPR modos base_kawai2](outputs/base_kawai2/GPR_mode_fits.png)
+![Ajuste GPR modos base_kawai2](../outputs/base_kawai2/GPR_mode_fits.png)
 
-![Scatter LOO base_kawai2](outputs/base_kawai2/GPR_loo_scatter.png)
+![Scatter LOO base_kawai2](../outputs/base_kawai2/GPR_loo_scatter.png)
 
 ### 6.2 Test externo (5 ángulos, todos fuera de zona)
 
-![Error test externo base_kawai2](outputs/base_kawai2/GPR_error_vs_theta.png)
+![Error test externo base_kawai2](../outputs/base_kawai2/GPR_error_vs_theta.png)
 
 | θ (°) | err_rel |
 |---|---|
@@ -272,7 +272,7 @@ Las 5 simulaciones nuevas se ejecutaron con la misma configuración V5 (malla ~7
 
 ### 7.1 Figura principal
 
-![Comparativa 4 bases](outputs/comparativa/error_vs_theta_comparativa.png)
+![Comparativa 4 bases](../outputs/comparativa/error_vs_theta_comparativa.png)
 
 Las curvas se interrumpen donde una base no tiene ángulos de test (están en su entrenamiento).
 
@@ -345,7 +345,7 @@ Peine uniforme de paso 5° desplazado 3.125° — múltiplos impares de 0.625°,
 
 Antes de interpretar diferencias entre bases, se cuantifica el ruido intrínseco del pipeline CFD (malla rotada, cobertura de capas variable) usando los pares físicamente equivalentes por simetría $\theta \leftrightarrow 90°-\theta$: (40°, 50°) y (42.5°, 47.5°). La transformación de simetría correcta se descubre empíricamente probando las 8 transformaciones del grupo diédrico D4 sobre el layout de sondas y eligiendo la que minimiza la discrepancia:
 
-![Suelo de ruido](outputs/holdout/symmetry_noise_fields.png)
+![Suelo de ruido](../outputs/holdout/symmetry_noise_fields.png)
 
 La transformación ganadora (reflexión antidiagonal, $(x,y) \to (-y,-x)$) reduce el RMS de 0.07–0.12 (con cualquier otra transformación, o sin transformar) a **0.0003–0.0005** — validación cruzada de que la simetría C4+reflexión del pipeline CFD es correcta con precisión de 3 órdenes de magnitud.
 
@@ -355,9 +355,9 @@ Diferencias de RMSE entre bases por debajo de este valor no son atribuibles al d
 
 ### 7.6.2 Resultados: media sobre los 9 ángulos de holdout
 
-![Error relativo holdout](outputs/holdout/error_vs_theta_holdout_err_rel_common.png)
+![Error relativo holdout](../outputs/holdout/error_vs_theta_holdout_err_rel_common.png)
 
-![Error en Cp_min holdout](outputs/holdout/error_vs_theta_holdout_err_cpmin.png)
+![Error en Cp_min holdout](../outputs/holdout/error_vs_theta_holdout_err_cpmin.png)
 
 | Métrica | Estrato | base_ref | base_kawai | base_kawai2 | base_full22 |
 |---|---|---|---|---|---|
@@ -424,7 +424,7 @@ Correr a 20 cores cuesta 1.36× más CPU-h que a 10 (eficiencia del 73% al dobla
 
 **Coste acumulado por base:**
 
-![Coste vs error](outputs/comparativa/cost_vs_error.png)
+![Coste vs error](../outputs/comparativa/cost_vs_error.png)
 
 | Base | N | CPU-h eq10 | LOO |
 |---|---|---|---|
