@@ -51,6 +51,8 @@ from sklearn.gaussian_process.kernels import (
     WhiteKernel,
 )
 
+from ROM_gibbs_kernel import fit_gibbs_mode
+
 
 # =======================================================================
 #  CONFIGURACION
@@ -65,15 +67,22 @@ R_MIN       = 1      # inicio del sweep (siempre 1)
 #   R_MAX     = N_snap - 2  (rango efectivo del fold LOO con N-1 snapshots centrados)
 #   R_COMPARE = r tal que energia acumulada >= 99.5%, clamped a [3, R_MAX]
 N_RESTARTS  = 50     # restarts MLE por GPR (mayor robustez frente a optimos locales)
+GIBBS_RESTARTS = 8   # restarts MLE del GP de Gibbs (a mano; superficie bien portada, beta->0 robusto)
 THETA_SCALE = 50.0   # theta_norm = theta / THETA_SCALE in [0, 1]
 
-KERNEL_NAMES = ["Matern52", "Matern32", "RBF", "RatQuad"]
+# Candidatos de kernel comparados en la Fase 1. "Gibbs" es el GP no estacionario
+# de longitud de escala variable (ROM_gibbs_kernel.py): compite en igualdad con
+# los estacionarios de scikit-learn. La evidencia acumulada (memoria §7.6) es que
+# empata con el estacionario (beta->0); mantenerlo como candidato hace que el
+# pipeline lo verifique en cada corrida en vez de darlo por sentado.
+KERNEL_NAMES = ["Matern52", "Matern32", "RBF", "RatQuad", "Gibbs"]
 
 COLORS = {
     "Matern52": "#1f4e79",
     "Matern32": "#2e86ab",
     "RBF":      "#e84855",
     "RatQuad":  "#f4a261",
+    "Gibbs":    "#6a4c93",
 }
 
 REF_TICKS = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45]   # ticks de referencia para ejes de angulo
@@ -140,6 +149,35 @@ def make_kernel(name: str, var_y: float):
     return amp * base + noise
 
 
+def fit_mode_gp(kernel_name: str, th2d: np.ndarray, y: np.ndarray,
+                n_restarts: int = N_RESTARTS):
+    """
+    Ajusta el GP de un modo POD y devuelve un objeto con interfaz sklearn
+    (.predict(X, return_std=False)).
+
+    - Kernels estacionarios (Matern*, RBF, RatQuad): GaussianProcessRegressor.
+    - "Gibbs": GibbsModeGP (GP no estacionario a mano, misma interfaz).
+
+    Para los kernels estacionarios el comportamiento es identico al codigo
+    previo (misma var_y, mismos ajustes); Gibbs se anade sin ramificar el
+    resto del pipeline.
+    """
+    if kernel_name == "Gibbs":
+        return fit_gibbs_mode(th2d, y, n_restarts=GIBBS_RESTARTS)
+
+    var_y = max(float(np.var(y)), 1e-8)
+    gpr = GaussianProcessRegressor(
+        kernel=make_kernel(kernel_name, var_y),
+        n_restarts_optimizer=n_restarts,
+        normalize_y=True,
+        alpha=1e-10,
+    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        gpr.fit(th2d, y)
+    return gpr
+
+
 # =======================================================================
 #  3. LOO-CV COMPLETO CON RE-POD POR FOLD
 # =======================================================================
@@ -197,17 +235,7 @@ def loo_cv_full(
         # --- GPR: un modelo por modo ---
         alpha_pred = np.zeros(r)
         for j in range(r):
-            a_j   = A_tr[j, :]
-            var_j = max(float(np.var(a_j)), 1e-8)
-            gpr   = GaussianProcessRegressor(
-                kernel=make_kernel(kernel_name, var_j),
-                n_restarts_optimizer=n_restarts,
-                normalize_y=True,
-                alpha=1e-10,
-            )
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                gpr.fit(th_train, a_j)
+            gpr = fit_mode_gp(kernel_name, th_train, A_tr[j, :], n_restarts)
             alpha_pred[j] = float(gpr.predict(th_test))
 
         # --- Reconstruccion y error total ---
@@ -323,24 +351,14 @@ def fit_full_model(
     print(f"{'='*65}")
 
     for j in range(r_star):
-        a_j   = A[j, :]
-        var_j = max(float(np.var(a_j)), 1e-8)
-        gpr   = GaussianProcessRegressor(
-            kernel=make_kernel(kernel_name, var_j),
-            n_restarts_optimizer=N_RESTARTS,
-            normalize_y=True,
-            alpha=1e-10,
-        )
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            gpr.fit(theta_norm.reshape(-1, 1), a_j)
+        gpr = fit_mode_gp(kernel_name, theta_norm.reshape(-1, 1), A[j, :])
 
         mu, std = gpr.predict(theta_dense.reshape(-1, 1), return_std=True)
         mu_dense[j]  = mu
         std_dense[j] = std
         gprs.append(gpr)
 
-        k_params = gpr.kernel_
+        k_params = gpr.kernel_ if hasattr(gpr, "kernel_") else gpr.describe()
         print(f"  Modo {j+1:2d}: kernel ajustado = {k_params}")
 
     return gprs, mu_dense, std_dense, theta_dense * THETA_SCALE
@@ -630,17 +648,17 @@ def save_results(
 #  MAIN
 # =======================================================================
 
-def _parse_args() -> argparse.Namespace:
+def _parse_args(argv=None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="ROM_GPR: GPR por modo POD")
     p.add_argument(
         "--outdir", default="outputs/base_full",
         help="Directorio con ROM_POD_basis.npz y donde se escriben los resultados",
     )
-    return p.parse_args()
+    return p.parse_args(argv)
 
 
-def main():
-    args   = _parse_args()
+def main(argv=None):
+    args   = _parse_args(argv)
     outdir = SCRIPT_DIR / args.outdir
     outdir.mkdir(parents=True, exist_ok=True)
 

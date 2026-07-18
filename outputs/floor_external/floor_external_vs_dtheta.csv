@@ -1,0 +1,4 @@
+level,n_train,r_star,proj_glob,proj_zona,proj_fuera,total_glob,total_zona,total_fuera
+dtheta_10,6,5,0.10290,0.18008,0.04116,0.18376,0.29335,0.09609
+dtheta_5,10,9,0.04388,0.05661,0.03371,0.09053,0.14439,0.04744
+dtheta_2p5,22,12,0.02971,0.03658,0.02421,0.07429,0.11748,0.03974

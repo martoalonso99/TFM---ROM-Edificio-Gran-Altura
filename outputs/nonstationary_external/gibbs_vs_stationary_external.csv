@@ -1,0 +1,3 @@
+model,rmse_glob,rmse_zona,rmse_fuera
+stationary,0.01077,0.01221,0.00962
+gibbs,0.01077,0.01221,0.00962

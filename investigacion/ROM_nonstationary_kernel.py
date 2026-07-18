@@ -1,6 +1,6 @@
 """
-ROM_nonstationary_kernel.py
-===========================
+ROM_nonstationary_kernel.py   (investigacion/)
+==============================================
 Dos experimentos sobre el suelo de error del ROM (ver ROM_floor_diagnostic.py),
 usando SOLO outputs/base_full/ROM_POD_basis.npz (base fija r*=12).
 
@@ -17,91 +17,44 @@ usando SOLO outputs/base_full/ROM_POD_basis.npz (base fija r*=12).
     compara con (i) el residuo de interpolacion (~0.014) y (ii) el suelo de
     reproducibilidad numerica del test de simetria (4e-4).
 
-Todo con GP implementado a mano (numpy + scipy) para controlar el kernel; el
-unico cambio entre 'estacionario' y 'Gibbs' es beta libre vs beta=0.
+La maquinaria del GP de Gibbs (bump, ell, gibbs_K, nll, fit_gp, predict, MU,
+WID, RNG) vive en ROM_gibbs_kernel.py (produccion) y se re-exporta aqui para
+compatibilidad con los scripts que hacen 'from ROM_nonstationary_kernel import
+fit_gp, predict, ...'.
 
 Salidas -> outputs/nonstationary/:
   gibbs_vs_stationary.csv, jitter_estimate.csv, nonstationary_kernel.png
 
-Uso:  python ROM_nonstationary_kernel.py
+Uso:  python investigacion/ROM_nonstationary_kernel.py
 """
 from __future__ import annotations
+
 import csv
+import sys
 from pathlib import Path
+
 import numpy as np
-from numpy.linalg import cholesky, solve
-from scipy.optimize import minimize
 import matplotlib.pyplot as plt
 
-SCRIPT_DIR = Path(__file__).resolve().parent
-OUT_DIR    = SCRIPT_DIR / "outputs" / "nonstationary"
+SCRIPT_DIR = Path(__file__).resolve().parent          # investigacion/
+ROOT       = SCRIPT_DIR.parent                        # Programacion/
+sys.path.insert(0, str(ROOT))
+
+# Re-exporta la maquinaria del kernel de Gibbs desde el modulo de produccion
+from ROM_gibbs_kernel import (   # noqa: E402
+    MU, WID, RNG, bump, ell, gibbs_K, nll, fit_gp, predict,
+)
+
+OUT_DIR    = ROOT / "outputs" / "nonstationary"
 RSTAR      = 12
 TEST       = [7.5, 12.5, 17.5, 22.5, 27.5, 37.5]
 VORTEX     = (10.0, 30.0)
-MU, WID    = 20.0, 8.0          # campana del vortice (grados)
 SYM_FLOOR  = 4e-4               # suelo de simetria (field RMS)
-RNG        = np.random.default_rng(0)
-
-
-def bump(theta):
-    return np.exp(-((np.asarray(theta, float) - MU) / WID) ** 2)
-
-
-def ell(theta, l0, beta):
-    return l0 * np.exp(-beta * bump(theta))
-
-
-def gibbs_K(ta, tb, l0, beta, sf2):
-    la = ell(ta, l0, beta)[:, None]; lb = ell(tb, l0, beta)[None, :]
-    d2 = (ta[:, None] - tb[None, :]) ** 2
-    pre = np.sqrt(2.0 * la * lb / (la ** 2 + lb ** 2))
-    return sf2 * pre * np.exp(-d2 / (la ** 2 + lb ** 2))
-
-
-def nll(params, th, y, beta_free):
-    l0 = np.exp(params[0]); sf2 = np.exp(params[1]); sn2 = np.exp(params[2])
-    beta = (np.log1p(np.exp(params[3])) if beta_free else 0.0)   # softplus>=0
-    K = gibbs_K(th, th, l0, beta, sf2) + sn2 * np.eye(len(th))
-    try:
-        L = cholesky(K + 1e-12 * np.eye(len(th)))
-    except np.linalg.LinAlgError:
-        return 1e10
-    a = solve(L.T, solve(L, y))
-    return float(0.5 * y @ a + np.log(np.diag(L)).sum() + 0.5 * len(th) * np.log(2 * np.pi))
-
-
-def fit_gp(th, y, beta_free):
-    ys = y.std() + 1e-12
-    yv = float(np.var(y))
-    best = None
-    for _ in range(12):
-        p0 = np.array([np.log(0.2 + 0.3 * RNG.random()),         # l0 (en unidades theta/50)
-                       np.log(max(yv, 1e-8)),                    # sf2
-                       np.log(1e-6 * max(yv, 1e-8) * (1 + RNG.random())),  # sn2
-                       RNG.normal(-1, 1)])                       # beta pre-softplus
-        bnds = [(np.log(0.03), np.log(3)), (np.log(1e-8), np.log(1e3)),
-                (np.log(1e-12), np.log(1e-1)), (-6, 4)]
-        r = minimize(nll, p0, args=(th, y, beta_free), method="L-BFGS-B", bounds=bnds)
-        if best is None or r.fun < best.fun:
-            best = r
-    p = best.x
-    l0 = np.exp(p[0]); sf2 = np.exp(p[1]); sn2 = np.exp(p[2])
-    beta = (np.log1p(np.exp(p[3])) if beta_free else 0.0)
-    return dict(l0=l0, sf2=sf2, sn2=sn2, beta=beta, th=th, y=y)
-
-
-def predict(gp, tstar):
-    th, y = gp["th"], gp["y"]
-    K = gibbs_K(th, th, gp["l0"], gp["beta"], gp["sf2"]) + gp["sn2"] * np.eye(len(th))
-    ks = gibbs_K(np.atleast_1d(tstar), th, gp["l0"], gp["beta"], gp["sf2"])
-    L = cholesky(K + 1e-12 * np.eye(len(th)))
-    a = solve(L.T, solve(L, y))
-    return float((ks @ a).ravel()[0])
 
 
 def main():
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    d = np.load(str(SCRIPT_DIR / "outputs" / "base_full" / "ROM_POD_basis.npz"))
+    d = np.load(str(ROOT / "outputs" / "base_full" / "ROM_POD_basis.npz"))
     mean, Phi_full, A_full = d["mean"], d["Phi"], d["A"]
     angles = np.round(d["angles"], 3)
     X = mean[:, None] + Phi_full @ A_full
@@ -202,7 +155,7 @@ def main():
     ax[1].set_title("(b) estacionario vs Gibbs + suelo de jitter"); ax[1].legend(fontsize=8); ax[1].grid(alpha=.3)
     fig.tight_layout(); fig.savefig(OUT_DIR / "nonstationary_kernel.png", dpi=150, bbox_inches="tight")
     plt.close(fig)
-    print(f"\n  -> {OUT_DIR.relative_to(SCRIPT_DIR)}/  (gibbs_vs_stationary.csv, jitter_estimate.csv, nonstationary_kernel.png)")
+    print(f"\n  -> {OUT_DIR.relative_to(ROOT)}/  (gibbs_vs_stationary.csv, jitter_estimate.csv, nonstationary_kernel.png)")
 
 
 if __name__ == "__main__":

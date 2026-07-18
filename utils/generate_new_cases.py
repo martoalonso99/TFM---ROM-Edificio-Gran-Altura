@@ -34,8 +34,8 @@ import struct
 import zipfile
 from pathlib import Path
 
-SCRIPT_DIR = Path(__file__).resolve().parent
-DATA_DIR = SCRIPT_DIR.parent / "Simulaciones" / "ROM"
+SCRIPT_DIR = Path(__file__).resolve().parent   # TFM/Programacion/utils/
+DATA_DIR = SCRIPT_DIR.parent.parent / "Simulaciones" / "ROM"
 TEMPLATE_CASE = "ROMCase_theta_20"
 
 # Angulos intermedios: grid de 2.5 deg, excluyendo los ya simulados (multiplos de 5)

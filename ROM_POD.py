@@ -670,7 +670,7 @@ def save_basis(pod: dict, angles: np.ndarray, probe_coords: np.ndarray,
 #  MAIN
 # =======================================================================
 
-def _parse_args() -> argparse.Namespace:
+def _parse_args(argv=None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="ROM_POD: POD de snapshots CFD")
     p.add_argument(
         "--angles",
@@ -690,14 +690,14 @@ def _parse_args() -> argparse.Namespace:
         "--outdir", default="outputs/base_full",
         help="Directorio de salida relativo a Programacion/ (default: outputs/base_full)",
     )
-    return p.parse_args()
+    return p.parse_args(argv)
 
 
 TPU11_SET = {0.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0, 50.0}
 
 
-def main():
-    args   = _parse_args()
+def main(argv=None):
+    args   = _parse_args(argv)
     outdir = SCRIPT_DIR / args.outdir
     outdir.mkdir(parents=True, exist_ok=True)
 

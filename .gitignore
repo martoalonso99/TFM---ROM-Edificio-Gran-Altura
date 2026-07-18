@@ -4,6 +4,9 @@
 outputs/**/*.npz
 outputs/**/*.png
 
+# Snapshots locales de resultados (backup en disco, no versionar)
+legacy/outputs_*/
+
 # Python
 __pycache__/
 *.pyc

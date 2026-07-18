@@ -27,15 +27,19 @@ Uso:
 from __future__ import annotations
 
 import csv
+import sys
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 
-from ROM_POD import DATA_DIR, N_PROBES, Q_REF, _parse_probe_file, fmt_angle
+SCRIPT_DIR = Path(__file__).resolve().parent          # investigacion/
+ROOT       = SCRIPT_DIR.parent                        # Programacion/
+sys.path.insert(0, str(ROOT))
 
-SCRIPT_DIR = Path(__file__).resolve().parent
-OUT_DIR    = SCRIPT_DIR / "outputs" / "holdout"
+from ROM_POD import DATA_DIR, N_PROBES, Q_REF, _parse_probe_file, fmt_angle   # noqa: E402
+
+OUT_DIR    = ROOT / "outputs" / "holdout"
 
 # Pares fisicamente equivalentes por reflexion theta <-> 90-theta
 PAIRS = [(40.0, 50.0), (42.5, 47.5)]
@@ -180,7 +184,7 @@ def plot_pairs(cp_pairs_thetas: list[tuple], cp_fields: list[tuple],
     fig.tight_layout()
     fig.savefig(out_path, dpi=150, bbox_inches="tight")
     plt.close(fig)
-    print(f"  -> {out_path.relative_to(SCRIPT_DIR)}")
+    print(f"  -> {out_path.relative_to(ROOT)}")
 
 
 # =======================================================================
@@ -227,7 +231,7 @@ def main():
         w.writerow([])
         w.writerow(["best_transform", best_name, "", ""])
         w.writerow(["noise_floor_rms", f"{noise_floor:.4f}", "", ""])
-    print(f"  -> {csv_path.relative_to(SCRIPT_DIR)}")
+    print(f"  -> {csv_path.relative_to(ROOT)}")
 
     plot_pairs(PAIRS, cp_pairs, best_perm, OUT_DIR / "symmetry_noise_fields.png")
 

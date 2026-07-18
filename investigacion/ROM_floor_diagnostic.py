@@ -40,8 +40,9 @@ import matplotlib.pyplot as plt
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import Matern, ConstantKernel as C, WhiteKernel
 
-SCRIPT_DIR = Path(__file__).resolve().parent
-OUT_DIR    = SCRIPT_DIR / "outputs" / "floor_diag"
+SCRIPT_DIR = Path(__file__).resolve().parent          # investigacion/
+ROOT       = SCRIPT_DIR.parent                        # Programacion/
+OUT_DIR    = ROOT / "outputs" / "floor_diag"
 THETA_SCALE = 50.0
 RSTAR       = 12
 N_RESTARTS  = 15
@@ -67,7 +68,7 @@ def fit_gpr(theta_tr, y):
 
 def main():
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    d = np.load(str(SCRIPT_DIR / "outputs" / "base_full" / "ROM_POD_basis.npz"))
+    d = np.load(str(ROOT / "outputs" / "base_full" / "ROM_POD_basis.npz"))
     mean, Phi_full, A_full = d["mean"], d["Phi"], d["A"]
     angles = np.round(d["angles"], 3)
     X = mean[:, None] + Phi_full @ A_full            # snapshots exactos (400 x 22)
@@ -129,7 +130,7 @@ def main():
         for r in rows: w.writerow({k: (f"{v:.5f}" if isinstance(v, float) else v) for k, v in r.items()})
 
     # barrido e_proj/e_interp vs r (ya guardado)
-    g = np.load(str(SCRIPT_DIR / "outputs" / "base_full" / "ROM_GPR_results.npz"))
+    g = np.load(str(ROOT / "outputs" / "base_full" / "ROM_GPR_results.npz"))
     sr, sp, si, st = g["sweep_r"], g["sweep_mean_proj"], g["sweep_mean_interp"], g["sweep_mean_total"]
     with open(OUT_DIR / "floor_vs_r.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f); w.writerow(["r", "e_proj", "e_interp", "e_total"])
@@ -151,7 +152,7 @@ def main():
     ax[1].set_title("Descomposicion proj/interp vs r"); ax[1].grid(alpha=.3); ax[1].legend(fontsize=8)
     fig.tight_layout(); fig.savefig(OUT_DIR / "floor_diagnostic.png", dpi=150, bbox_inches="tight")
     plt.close(fig)
-    print(f"\n  -> {OUT_DIR.relative_to(SCRIPT_DIR)}/  (floor_vs_dtheta.csv, floor_vs_r.csv, floor_diagnostic.png)")
+    print(f"\n  -> {OUT_DIR.relative_to(ROOT)}/  (floor_vs_dtheta.csv, floor_vs_r.csv, floor_diagnostic.png)")
 
 
 if __name__ == "__main__":

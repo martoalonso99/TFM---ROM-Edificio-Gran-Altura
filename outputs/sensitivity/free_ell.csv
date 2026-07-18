@@ -1,0 +1,3 @@
+model,glob,zona,fuera,mejora_glob_pct
+stationary_baseline,0.0149,0.0168,0.0113,0.0
+free_ell_4knots,0.0153,0.0178,0.0104,-2.5

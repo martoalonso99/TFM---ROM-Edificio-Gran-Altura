@@ -17,18 +17,16 @@ Uso:
 from __future__ import annotations
 
 import csv
-import warnings
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-from sklearn.gaussian_process import GaussianProcessRegressor
 
 from ROM_POD import (
     DATA_DIR, MAX_THETA, N_PROBES, Q_REF, REF_TICKS,
     _parse_probe_file, discover_angles, fmt_angle,
 )
-from ROM_GPR import make_kernel, N_RESTARTS, THETA_SCALE
+from ROM_GPR import fit_mode_gp, THETA_SCALE
 
 SCRIPT_DIR   = Path(__file__).resolve().parent
 OUT_DIR      = SCRIPT_DIR / "outputs" / "comparativa"
@@ -63,18 +61,7 @@ def retrain_gprs(gpr_data: dict) -> list:
     theta_n  = (angles / THETA_SCALE).reshape(-1, 1)
     gprs = []
     for j in range(r_star):
-        a_j   = A[j, :]
-        var_j = max(float(np.var(a_j)), 1e-8)
-        gpr   = GaussianProcessRegressor(
-            kernel=make_kernel(kernel, var_j),
-            n_restarts_optimizer=N_RESTARTS,
-            normalize_y=True,
-            alpha=1e-10,
-        )
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            gpr.fit(theta_n, a_j)
-        gprs.append(gpr)
+        gprs.append(fit_mode_gp(kernel, theta_n, A[j, :]))
     return gprs
 
 

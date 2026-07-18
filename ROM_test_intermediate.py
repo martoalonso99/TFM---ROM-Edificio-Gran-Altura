@@ -17,18 +17,16 @@ from __future__ import annotations
 
 import argparse
 import csv
-import warnings
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-from sklearn.gaussian_process import GaussianProcessRegressor
 
 from ROM_POD import (
     DATA_DIR, MAX_THETA, N_PROBES, Q_REF, REF_TICKS,
     _parse_probe_file, discover_angles, fmt_angle,
 )
-from ROM_GPR import make_kernel, N_RESTARTS, THETA_SCALE
+from ROM_GPR import fit_mode_gp, THETA_SCALE
 
 SCRIPT_DIR   = Path(__file__).resolve().parent
 VORTEX_RANGE = (10.0, 30.0)
@@ -59,18 +57,7 @@ def retrain_gprs(gpr_data: dict) -> list:
     print(f"  Re-entrenando {r_star} GPRs ({kernel}) sobre {len(angles)} puntos...")
     gprs = []
     for j in range(r_star):
-        a_j   = A[j, :]
-        var_j = max(float(np.var(a_j)), 1e-8)
-        gpr   = GaussianProcessRegressor(
-            kernel=make_kernel(kernel, var_j),
-            n_restarts_optimizer=N_RESTARTS,
-            normalize_y=True,
-            alpha=1e-10,
-        )
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            gpr.fit(theta_norm, a_j)
-        gprs.append(gpr)
+        gprs.append(fit_mode_gp(kernel, theta_norm, A[j, :]))
     print("  Listo.")
     return gprs
 
@@ -240,11 +227,11 @@ def save_csv(gpr_data: dict, test_results: dict, out_path: Path):
 #  MAIN
 # =======================================================================
 
-def main():
+def main(argv=None):
     p = argparse.ArgumentParser(description="Test externo ROM en angulos intermedios")
     p.add_argument("--outdir", default="outputs/base_ref",
                    help="Directorio del modelo ROM (default: outputs/base_ref)")
-    args   = p.parse_args()
+    args   = p.parse_args(argv)
     outdir = SCRIPT_DIR / args.outdir
 
     print(f"\n{'='*65}")

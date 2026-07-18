@@ -14,7 +14,7 @@ import struct
 import argparse
 from pathlib import Path
 
-SCRIPT_DIR = Path(__file__).resolve().parent   # TFM/Programacion/
+SCRIPT_DIR = Path(__file__).resolve().parent   # TFM/Programacion/utils/
 
 # ── Mapeo angulo -> nombre STL ───────────────────────────────────────────────
 # Solo cubre los 11 angulos enteros originales (0, 5, ..., 50).
@@ -57,12 +57,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--stl_dir",
-        default=str(SCRIPT_DIR.parent / "Base Geometry and Results"),
+        default=str(SCRIPT_DIR.parent.parent / "Base Geometry and Results"),
         help="Carpeta con los STLs rotados",
     )
     parser.add_argument(
         "--rom_dir",
-        default=str(SCRIPT_DIR.parent / "Simulaciones" / "ROM"),
+        default=str(SCRIPT_DIR.parent.parent / "Simulaciones" / "ROM"),
         help="Carpeta raiz con los casos ROMCase_theta_XX",
     )
     args = parser.parse_args()
