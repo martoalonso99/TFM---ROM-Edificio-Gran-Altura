@@ -69,6 +69,11 @@ def cmd_holdout(args):
     ROM_holdout_eval.main()
 
 
+def cmd_sensors(args):
+    import ROM_sensor_placement
+    ROM_sensor_placement.main(["--outdir", args.outdir, "--pmax", str(args.pmax)])
+
+
 def cmd_run(args):
     """Pipeline completo de una base: pod -> gpr -> evaluate."""
     print(f"\n### [1/3] POD  ({args.angles} -> {args.outdir})")
@@ -125,6 +130,12 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("compare", help="comparativa de error entre bases").set_defaults(func=cmd_compare)
     sub.add_parser("cost", help="coste computacional normalizado por base").set_defaults(func=cmd_cost)
     sub.add_parser("holdout", help="evaluacion sobre el holdout pre-registrado").set_defaults(func=cmd_holdout)
+
+    ss = sub.add_parser("sensors", help="sensorizacion optima (QR pivoting / SSPOR)")
+    ss.add_argument("--outdir", default="outputs/base_kawai2")
+    ss.add_argument("--pmax", type=int, default=60)
+    ss.set_defaults(func=cmd_sensors)
+
     sub.add_parser("investigate", help="lista los scripts de investigacion/").set_defaults(func=cmd_investigate)
 
     return p
