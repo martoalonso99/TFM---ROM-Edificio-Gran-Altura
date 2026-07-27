@@ -35,9 +35,14 @@ La **matriz de snapshots** es $X \in \mathbb{R}^{400 \times N}$ donde cada colum
 **Metodología común a todas las bases:**
 - POD centrada (SVD económica): $X' = X - \bar{x}\mathbf{1}^T = U\Sigma V^T$, $\Phi = U[:,{:}r]$
 - Una GPR por modo POD (kernel Matérn + WhiteKernel, MLE con 50 multistarts)
-- Selección de kernel y de $r^*$ por **LOO-CV con re-POD por fold** (la base se recalcula desde cero en cada fold para evitar contaminación)
-- Test externo: predicción en ángulos disponibles no usados en el entrenamiento
+- Selección de kernel y de $r^*$ por **validación cruzada (LOO-CV) con re-POD por fold** (la base se recalcula desde cero en cada fold para evitar contaminación)
 - Métrica: $\varepsilon = \|C_{p,CFD} - C_{p,ROM}\|_2 / \|C_{p,CFD} - \bar{C_p}^{train}\|_2$
+
+**Nomenclatura de conjuntos** (nombres estándar de ML, para evitar ambigüedad):
+
+- **Validación cruzada (LOO-CV)** — resampling sobre los ángulos de entrenamiento de cada base; se usa para **seleccionar** $r^*$ y el kernel. No es una medida de generalización imparcial (§7.3).
+- **Evaluación fuera de muestra por base** (§3–§6) — ángulos ya simulados que una base no usó en su entrenamiento; **diagnóstico** de dónde falla cada diseño. Los ángulos **difieren entre bases**, por lo que **no es comparable entre ellas** (§7.3–§7.5).
+- **Conjunto de test** (holdout pre-registrado, §7.6) — 9 ángulos comunes que ninguna base vio jamás, con métricas fijadas *antes* de simular. Es la **evaluación final imparcial y la única comparación válida entre bases**.
 
 ---
 
@@ -76,7 +81,10 @@ Observaciones:
 | **Matérn 3/2** | **0.1750** ✓ |
 | Matérn 5/2 | 0.1922 |
 | RatQuad | 0.2161 |
+| Gibbs (no estac.) | 0.2187 |
 | RBF | 0.2232 |
+
+*(El kernel no estacionario de Gibbs se incorpora como 5º candidato; pierde en las cuatro bases — ver §8.4.)*
 
 ![Sweep r base_ref](../outputs/base_ref/GPR_r_sweep.png)
 
@@ -87,11 +95,11 @@ Observaciones:
 
 ![Scatter LOO base_ref](../outputs/base_ref/GPR_loo_scatter.png)
 
-### 3.4 Test externo (17 ángulos intermedios)
+### 3.4 Evaluación fuera de muestra (17 ángulos no entrenados)
 
 Con las 5 simulaciones nuevas del nivel 1.25°, base_ref se evalúa ahora en **17 ángulos** no vistos:
 
-![Error test externo base_ref](../outputs/base_ref/GPR_error_vs_theta.png)
+![Evaluación fuera de muestra base_ref](../outputs/base_ref/GPR_error_vs_theta.png)
 
 | θ (°) | Cp_min CFD | Cp_min ROM | err_rel |
 |---|---|---|---|
@@ -151,11 +159,11 @@ Estrategia adaptativa: añadir simulaciones **solo donde el error era alto**.
 
 ![Scatter LOO base_kawai](../outputs/base_kawai/GPR_loo_scatter.png)
 
-### 4.2 Test externo (10 ángulos)
+### 4.2 Evaluación fuera de muestra (10 ángulos)
 
 Con los 5 ángulos nuevos, base_kawai tiene ahora test **dentro** de la zona (los midpoints del paso 2.5°):
 
-![Error test externo base_kawai](../outputs/base_kawai/GPR_error_vs_theta.png)
+![Evaluación fuera de muestra base_kawai](../outputs/base_kawai/GPR_error_vs_theta.png)
 
 | θ (°) | err_rel | Zona |
 |---|---|---|
@@ -198,7 +206,15 @@ Con los 5 ángulos nuevos, base_kawai tiene ahora test **dentro** de la zona (lo
 
 ![Comparación kernels base_full](../outputs/base_full/GPR_kernel_comparison.png)
 
-- Kernel: **Matérn 5/2** — único caso: con N=22 uniforme hay información para estimar una función más suave sin sobreajuste
+| Kernel | LOO medio (r=4) |
+|---|---|
+| **Matérn 5/2** | **0.1212** ✓ |
+| Matérn 3/2 | 0.1214 |
+| RatQuad | 0.1234 |
+| Gibbs (no estac.) | 0.1260 |
+| RBF | 0.1329 |
+
+- Kernel: **Matérn 5/2** — único caso: con N=22 uniforme hay información para estimar una función más suave sin sobreajuste. Es el único bake-off donde Matérn 5/2 supera a 3/2 (por un margen mínimo, 0.1212 vs 0.1214). Gibbs, el candidato no estacionario, queda 4º (ver §8.4).
 
 ![Sweep r base_full](../outputs/base_full/GPR_r_sweep.png)
 
@@ -208,7 +224,7 @@ Con los 5 ángulos nuevos, base_kawai tiene ahora test **dentro** de la zona (lo
 
 ![Scatter LOO base_full](../outputs/base_full/GPR_loo_scatter.png)
 
-### 5.2 Test externo (5 ángulos, todos en zona)
+### 5.2 Evaluación fuera de muestra (5 ángulos, todos en zona)
 
 Los 5 ángulos nuevos del nivel 1.25° **no** están en el entrenamiento de base_full22 → miden cómo interpola la zona el paso uniforme 2.5°:
 
@@ -252,9 +268,9 @@ Las 5 simulaciones nuevas se ejecutaron con la misma configuración V5 (malla ~7
 
 ![Scatter LOO base_kawai2](../outputs/base_kawai2/GPR_loo_scatter.png)
 
-### 6.2 Test externo (5 ángulos, todos fuera de zona)
+### 6.2 Evaluación fuera de muestra (5 ángulos, todos fuera de zona)
 
-![Error test externo base_kawai2](../outputs/base_kawai2/GPR_error_vs_theta.png)
+![Evaluación fuera de muestra base_kawai2](../outputs/base_kawai2/GPR_error_vs_theta.png)
 
 | θ (°) | err_rel |
 |---|---|
@@ -270,15 +286,15 @@ Las 5 simulaciones nuevas se ejecutaron con la misma configuración V5 (malla ~7
 
 ## 7. Comparativa: ¿dónde colocar las simulaciones?
 
-### 7.1 Figura principal
+### 7.1 Figura diagnóstica (no comparativa)
 
-![Comparativa 4 bases](../outputs/comparativa/error_vs_theta_comparativa.png)
+![Diagnóstico de error por base](../outputs/comparativa/error_vs_theta_comparativa.png)
 
-Las curvas se interrumpen donde una base no tiene ángulos de test (están en su entrenamiento).
+Esta figura es un **diagnóstico de localización del error, no una comparación entre bases**. Cada curva es la evaluación fuera de muestra de una base, definida **solo en sus propios ángulos no entrenados** (por eso se interrumpe donde la base sí entrenó). Como las bases no comparten esos ángulos, **no deben compararse las alturas de las curvas entre bases** — esa es precisamente la razón de ser del conjunto de test común de §7.6. Lo que sí es legible y común a todas: el error se dispara en la banda del vórtice [10–30°] para cualquier diseño muestral.
 
-### 7.2 Tabla resumen (test externo)
+### 7.2 Tabla resumen (evaluación fuera de muestra por base)
 
-| Base | N | r\* | Kernel | LOO | Err. test zona | Err. test fuera |
+| Base | N | r\* | Kernel | Valid. (LOO) | Err. f. muestra zona | Err. f. muestra fuera |
 |---|---|---|---|---|---|---|
 | `base_ref` | 10 | 8 | Matérn 3/2 | 0.171 | 12.2% (12 ang.) | 4.2% (5 ang.) |
 | `base_kawai` | 17 | 10 | Matérn 3/2 | 0.138 | 9.5% (5 ang.) | 3.8% (5 ang.) |
@@ -295,7 +311,7 @@ base_kawai2 (990 CPU-h) vs base_full22 (976 CPU-h). En ambos casos se evalúa la
 
 **Dentro de la zona** (en los 5 midpoints {11.25, ..., 21.25}):
 
-| θ (°) | base_full22 (test ext.) | base_kawai2 (fold LOO) |
+| θ (°) | base_full22 (f. muestra) | base_kawai2 (fold LOO) |
 |---|---|---|
 | 11.25 | 0.055 | 0.064 |
 | 13.75 | 0.052 | 0.053 |
@@ -306,7 +322,7 @@ base_kawai2 (990 CPU-h) vs base_full22 (976 CPU-h). En ambos casos se evalúa la
 
 **Fuera de la zona** (en los 5 semienteros {2.5, ..., 42.5}):
 
-| θ (°) | base_kawai2 (test ext.) | base_full22 (fold LOO) |
+| θ (°) | base_kawai2 (f. muestra) | base_full22 (fold LOO) |
 |---|---|---|
 | 2.5 | 0.041 | 0.036 |
 | 7.5 | 0.074 | 0.059 |
@@ -329,11 +345,11 @@ Folds LOO más difíciles de ambas bases N=22:
 
 Con paso 1.25° el error en 22.5–23.75° apenas baja respecto al paso 2.5°. En esa franja los coeficientes modales del vórtice tienen su variación más rápida (el pico de succión se desplaza y reorganiza) y la interpolación GPR es intrínsecamente difícil: es el **límite de la parametrización actual**, no un déficit de muestreo. Documentable como limitación esperada del método (consistente con la física del vórtice de Kawai).
 
-**Nota importante**: §7.4 usa el fold LOO de base_kawai2 como sustituto del test externo (porque sus propios ángulos de entrenamiento no dejan huecos libres en la zona). §7.3 ya advierte que esto es una aproximación, no una medida externa real. La sección 7.6 resuelve esta limitación con un holdout pre-registrado, común a las cuatro bases, y **matiza el veredicto de 7.4**.
+**Nota importante**: §7.4 usa el fold de validación cruzada de base_kawai2 como sustituto de una evaluación externa común (porque sus propios ángulos de entrenamiento no dejan huecos libres en la zona). §7.3 ya advierte que esto es una aproximación, no una medida externa real. La sección 7.6 resuelve esta limitación con un holdout pre-registrado, común a las cuatro bases, y **matiza el veredicto de 7.4**.
 
 ---
 
-## 7.6 Holdout pre-registrado: comparativa ciega (BRIEF_holdout.md)
+## 7.6 Conjunto de test: holdout pre-registrado (comparación ciega, BRIEF_holdout.md)
 
 Para eliminar la dependencia de folds LOO (§7.3–7.5 usan aproximaciones distintas para cada base, no una medida común), se pre-registró un holdout de **9 ángulos que ninguna base ha visto jamás en entrenamiento**, con métricas y protocolo fijados *antes* de simular (ver `BRIEF_holdout.md`):
 
@@ -347,7 +363,7 @@ Antes de interpretar diferencias entre bases, se cuantifica el ruido intrínseco
 
 ![Suelo de ruido](../outputs/holdout/symmetry_noise_fields.png)
 
-La transformación ganadora (reflexión antidiagonal, $(x,y) \to (-y,-x)$) reduce el RMS de 0.07–0.12 (con cualquier otra transformación, o sin transformar) a **0.0003–0.0005** — validación cruzada de que la simetría C4+reflexión del pipeline CFD es correcta con precisión de 3 órdenes de magnitud.
+La transformación ganadora (reflexión antidiagonal, $(x,y) \to (-y,-x)$) reduce el RMS de 0.07–0.12 (con cualquier otra transformación, o sin transformar) a **0.0003–0.0005** — confirmación de que la simetría C4+reflexión del pipeline CFD es correcta con precisión de 3 órdenes de magnitud.
 
 $$\text{Suelo de ruido} = \text{RMS} \approx 0.0004 \text{ (unidades de } C_p\text{)}$$
 
@@ -373,9 +389,9 @@ Diferencias de RMSE entre bases por debajo de este valor no son atribuibles al d
 
 † En "fuera", base_full22 pierde en $C_{p,min}$ pese a ganar en RMSE/err. relativo — dominado por un solo punto (θ=8.125°, ver tabla de detalle).
 
-**El resultado clave, y la razón de ser del pre-registro**: la comparación ciega **no repite el veredicto de §7.4**. Allí, usando el fold LOO de base_kawai2 como sustituto del test externo, base_full22 ganaba con claridad dentro de la zona (8.8% vs 11.7%). Aquí, con el mismo test externo real para ambas, **base_kawai2 tiene el menor RMSE y el menor error relativo dentro de la zona de las cuatro bases**, y domina con claridad en la métrica físicamente más relevante — el error en el pico de succión ($C_{p,min}$) — tanto en zona (0.031 vs 0.046 de base_full22) como globalmente (0.024, mejor que las otras tres).
+**El resultado clave, y la razón de ser del pre-registro**: la comparación ciega **no repite el veredicto de §7.4**. Allí, usando el fold de validación cruzada de base_kawai2 como sustituto de una evaluación externa común, base_full22 ganaba con claridad dentro de la zona (8.8% vs 11.7%). Aquí, con el mismo conjunto de test para ambas, **base_kawai2 tiene el menor RMSE y el menor error relativo dentro de la zona de las cuatro bases**, y domina con claridad en la métrica físicamente más relevante — el error en el pico de succión ($C_{p,min}$) — tanto en zona (0.031 vs 0.046 de base_full22) como globalmente (0.024, mejor que las otras tres).
 
-Esto confirma exactamente la advertencia de §7.3: el fold LOO de un diseño con huecos irregulares no es intercambiable con un test externo real. La comparación pre-registrada es la autoritativa; **§7.4 se mantiene documentado por su valor pedagógico (ilustra el sesgo), pero su conclusión "el uniforme gana en zona" queda revertida por este resultado.**
+Esto confirma exactamente la advertencia de §7.3: el fold de validación cruzada de un diseño con huecos irregulares no es intercambiable con un conjunto de test común. La comparación pre-registrada es la autoritativa; **§7.4 se mantiene documentado por su valor pedagógico (ilustra el sesgo), pero su conclusión "el uniforme gana en zona" queda revertida por este resultado.**
 
 ### 7.6.3 Comparaciones pareadas (test de signos, n=9)
 
@@ -396,13 +412,101 @@ No hay una base que domine en las tres métricas y los dos estratos simultáneam
 - **Si el objetivo es error medio global mínimo** (uso genérico del ROM en todo el rango): base_full22 gana en RMSE y error relativo global, y es marginalmente más barata (976 vs 990 CPU-h).
 - **Si el objetivo es la carga de diseño estructural** (pico de succión, relevante para cladding y elementos de fachada en la zona de vórtice): base_kawai2 es la mejor opción, con un margen claro sobre el suelo de ruido.
 
-Dado que el TFM enmarca el problema en términos de cargas de viento sobre edificio alto (§ Objetivo), el error en $C_{p,min}$ tiene relevancia física directa que el error relativo agregado no captura. Esto se traslada a la recomendación final en §9.
+Dado que el TFM enmarca el problema en términos de cargas de viento sobre edificio alto (§ Objetivo), el error en $C_{p,min}$ tiene relevancia física directa que el error relativo agregado no captura. Esto se traslada a la recomendación final en §10.
 
 Salidas: `outputs/holdout/holdout_results.csv` (detalle por ángulo), `holdout_summary.csv` (medias), `holdout_pairwise.csv` (test de signos), `symmetry_noise.csv`.
 
 ---
 
-## 8. Coste computacional normalizado
+## 8. Suelo de error: descomposición y límite del método
+
+Elegida la base, la pregunta natural es *por qué* el error no baja de ~0.07–0.12 (error relativo en holdout) y si más CFD, más modos POD o un kernel más flexible lo reducirían. Esta sección descompone el error y descarta, con un experimento propio para cada una, las cuatro causas candidatas. Scripts: `investigacion/{ROM_floor_diagnostic, ROM_floor_external, ROM_nonstationary_kernel, ROM_gibbs_sensitivity}.py`.
+
+### 8.1 Descomposición proyección + interpolación frente a r
+
+El error de reconstrucción de un ángulo se descompone de forma aditiva en el que introduce la **base POD** (no representa el campo) y el que introduce la **GPR** (no predice bien los coeficientes):
+
+$$\varepsilon_{total}(r) = \varepsilon_{proj}(r) + \varepsilon_{interp}(r)$$
+
+Sobre `base_full` (`outputs/floor_diag/floor_vs_r.csv`):
+
+| r | ε_proj | ε_interp | ε_total |
+|---|---|---|---|
+| 4 | 0.097 | 0.024 | 0.121 |
+| 8 | 0.049 | 0.049 | 0.098 |
+| **12** | **0.038** | **0.059** | **0.0966** |
+| 16 | 0.032 | 0.065 | 0.097 |
+| 20 | 0.030 | 0.067 | 0.097 |
+
+![Descomposición del suelo de error](../outputs/floor_diag/floor_diagnostic.png)
+
+$\varepsilon_{proj}$ decrece de forma monótona y **satura** en r≈11 (~0.030); $\varepsilon_{interp}$ **crece** de forma monótona (los modos altos son ruidosos y difíciles de interpolar). El mínimo de $\varepsilon_{total}$ en r≈11–12 es exactamente r\*. **Añadir modos más allá de r\* no ayuda**: es la interpolación, no la base, lo que se degrada al subir r.
+
+### 8.2 Escalado con la densidad angular: meseta en Δθ≈5°
+
+Fijando la base y variando la densidad de entrenamiento (test held-out fijo), se mide cómo cae el error con Δθ (`floor_vs_dtheta.csv`, RMSE de campo):
+
+| Δθ entrenamiento | N | Interpolación (base fija) | ROM completo (re-POD) |
+|---|---|---|---|
+| 10° | 6 | 0.0260 | 0.0288 |
+| **5°** | 10 | **0.0147** | **0.0152** |
+| 2.5° | 13 | 0.0145 | 0.0151 |
+| 2.5°+dens | 16 | 0.0144 | 0.0151 |
+
+De 10°→5° el error casi se divide por dos; **de 5° en adelante densificar no cambia nada**, con o sin re-POD. La meseta está en Δθ≈5°.
+
+### 8.3 Variante externa rigurosa: la base POD sí contribuye
+
+La versión de §8.1–8.2 es *autocontenida* (la verdad son snapshots reconstruidos de la propia base, que ya "ha visto" los ángulos de test) → su suelo de proyección (0.0018) es optimista. La versión rigurosa usa como verdad el **CFD real del holdout** y **re-POD por fold** (`outputs/floor_external/floor_external_vs_dtheta.csv`). A Δθ=2.5° (el `base_full` real, cuyo ε_total coincide con su holdout de §7.6.2):
+
+| Estrato | ε_proj | ε_total | proj/total | Término dominante |
+|---|---|---|---|---|
+| Global | 0.0297 | 0.0743 | 40% | interpolación (60%) |
+| **Zona [10–30°]** | 0.0366 | 0.1175 | **31%** | **interpolación (69%)** |
+| **Fuera** | 0.0242 | 0.0397 | **61%** | **proyección (61%)** |
+
+![Suelo de error, variante externa](../outputs/floor_external/floor_external.png)
+
+**Matiz clave respecto a la versión LOO**: con datos externos la proyección **no** es despreciable (~40% global), y es dependiente del estrato — **en la zona del vórtice domina la interpolación** (69%), pero **fuera domina el truncamiento POD** (61%). La meseta hacia Δθ≈5° se mantiene.
+
+### 8.4 ¿Es no-estacionariedad de los coeficientes? Kernel de Gibbs
+
+Los coeficientes $a_j(\theta)$ del vórtice varían más rápido dentro de [10,30]° que fuera (escala local 1.7–2.4× más corta en los modos 1–5). Se prueba un GP **no estacionario de Gibbs**, $\ell(\theta)=\ell_0\,e^{-\beta\,b(\theta)}$ con $b$ una campana centrada en el vórtice, ajustando $\beta$ por máxima verosimilitud (anida el estacionario en $\beta=0$):
+
+| Modelo | glob | zona | fuera |
+|---|---|---|---|
+| Estacionario | 0.01402 | 0.01580 | 0.01047 |
+| Gibbs (MLE) | 0.01403 | 0.01581 | 0.01047 |
+
+![Kernel no estacionario](../outputs/nonstationary/nonstationary_kernel.png)
+
+**Idénticos.** La MLE elige $\beta\approx0$ en los modos que cargan el campo (solo activa $\beta$ en modos 7–9, de energía ínfima): la navaja de Occam rechaza la complejidad extra con N≈16–22. Blindado por sensibilidad (`outputs/sensitivity/`):
+
+- **Forma de la campana** (9 combinaciones μ∈{15,20,25}°, ancho∈{5,8,12}°): mejora ≤0.03%; ninguna bate al estacionario.
+- **ℓ(θ) libre** (spline log-lineal de 4 nudos): **−2.5%** (peor).
+- **r\*∈{8,12,16}**: Gibbs = estacionario en todos.
+- **LOO completo n=22 (bootstrap)**: Gibbs − estacionario = **+0.00007**, IC95% **[0.00000, 0.00018]** → estadísticamente distinguible pero ~0.4% **peor**.
+
+Gibbs está integrado como **5º candidato** en la selección de kernel del pipeline y **pierde en las cuatro bases** (§5.1, §6.1). El pipeline **demuestra** en cada corrida que la no-estacionariedad no gana, en lugar de asumirlo.
+
+### 8.5 ¿Es ruido de malla? Jitter frente a señal
+
+El único estimador limpio del ruido numérico es el test de simetría (§7.6.1), porque compara dos configuraciones físicamente idénticas: RMS ≈ 0.0004. Frente al residuo de interpolación en zona (0.0158) es el **2.5%** (0.06% en energía); el ruido relativo de los coeficientes (2.7%) lo confirma (`jitter_estimate.csv`). Los estimadores por coeficiente ($\sigma_n$ de la MLE, diferencias finitas) dan artefactos (~0.14) porque la amplitud del modo 1 los contamina — no deben usarse. **El residuo es señal no capturada, no ruido.**
+
+### 8.6 Síntesis: naturaleza del suelo de error
+
+Descartadas las cuatro causas candidatas, el suelo es un **límite muestral**:
+
+- **No es solo la base POD** — pero contribuye ~40% global (y ~61% *fuera* del vórtice); en la zona crítica sí domina la interpolación (69%).
+- **No es RANS** — el holdout mide ROM-vs-CFD; RANS solo limita ROM-vs-TPU.
+- **No es el kernel** — Gibbs = estacionario, con respaldo bootstrap.
+- **No es ruido de malla** — jitter 0.06% en energía.
+
+Lo que queda es la **migración no lineal del vórtice submuestreada a 2.5–5°**: la señal existe (está ~35× por encima del suelo de ruido) pero N≈16–22 no basta para interpolarla mejor. Único lever real: **más snapshots dirigidos al vórtice** (dirección `base_kawai2`) o aceptar el suelo — lo que refuerza el valor del muestreo adaptativo y de la sensorización óptima (fase siguiente).
+
+---
+
+## 9. Coste computacional normalizado
 
 Script: `ROM_cost_analysis.py`. El coste de cada caso se extrae de los logs del solver (`log.simpleFoam.<nCores>`) y se normaliza en dos capas:
 
@@ -437,9 +541,9 @@ Salidas: `outputs/comparativa/cost_per_case.csv`, `cost_resumen.csv`, `cost_vs_e
 
 ---
 
-## 9. Conclusiones
+## 10. Conclusiones
 
-1. **El paso 5° es insuficiente en la zona del vórtice de Kawai**: 12.2% de error medio de test frente a 4.2% fuera (base_ref). La variación no lineal de la posición del vórtice exige más resolución angular local.
+1. **El paso 5° es insuficiente en la zona del vórtice de Kawai**: 12.2% de error medio en la zona (evaluación fuera de muestra) frente a 4.2% fuera (base_ref). La variación no lineal de la posición del vórtice exige más resolución angular local.
 
 2. **Densificar la zona a 2.5° es la inversión más rentable**: base_kawai (+337 CPU-h sobre base_ref) reduce el error en zona de 12.2% a 9.5% y el LOO un 19%, sin degradar el comportamiento fuera.
 
@@ -449,7 +553,7 @@ Salidas: `outputs/comparativa/cost_per_case.csv`, `cost_resumen.csv`, `cost_vs_e
 
 5. **El kernel óptimo depende del diseño muestral**: Matérn 3/2 en todas las bases salvo base_full22 (Matérn 5/2) — solo el muestreo uniforme y denso soporta la hipótesis de mayor suavidad sin sobreajuste.
 
-6. **El cuello de botella es siempre la interpolación GPR**, no el truncamiento POD: en las cuatro bases $\varepsilon^{interp} > \varepsilon^{proj}$ en $r^*$. Añadir modos más allá de $r^*$ no reduce el error; añadir snapshots sí.
+6. **El cuello de botella depende del estrato** (§8.3): en la validación LOO interna $\varepsilon^{interp} > \varepsilon^{proj}$ en $r^*$ en las cuatro bases, pero la descomposición **externa rigurosa** (CFD real + re-POD) matiza que, a un ángulo nunca visto, la interpolación GPR domina **en la zona del vórtice** (~69% del error) mientras que **fuera** domina el truncamiento POD (~61%); globalmente la proyección aporta ~40% —no es despreciable—. Añadir modos más allá de $r^*$ no reduce el error ($\varepsilon^{interp}$ crece con $r$); añadir snapshots **dirigidos al vórtice** sí.
 
 7. **No hay una base que domine todas las métricas** (§7.6.4): base_full22 minimiza el error medio global (y es ligeramente más barata); base_kawai2 minimiza el error en el pico de succión, la cantidad físicamente relevante para cargas de diseño en la zona de vórtice. **Diseño recomendado**: si el TFM prioriza precisión general del ROM, base_full22 (LOO 9.7%, ~976 CPU-h); si prioriza fidelidad de cargas estructurales en la zona crítica, base_kawai2. Ninguna comparación pareada alcanza significancia estadística convencional con n=9 (§7.6.3) — la elección debe justificarse por relevancia física, no solo por el promedio agregado. La **sensorización óptima** (siguiente fase) se aplica sobre la base POD de la opción elegida.
 
@@ -457,7 +561,9 @@ Salidas: `outputs/comparativa/cost_per_case.csv`, `cost_resumen.csv`, `cost_vs_e
 
 9. **El suelo de ruido del pipeline CFD es muy bajo** (RMS ≈ 0.0004 en unidades de $C_p$, vía pares simétricos θ↔90°-θ, §7.6.1): confirma que la simetría C4+reflexión del pipeline es correcta con precisión de 3 órdenes de magnitud, y que las diferencias entre bases documentadas aquí (salvo kawai/kawai2 a nivel global) son señal real, no artefacto de malla.
 
+10. **El suelo de error es un límite muestral, no del método** (§8): la meseta aparece en Δθ≈5° y no baja densificando más. Se descarta cada causa alternativa con su propio experimento — no es RANS (el holdout mide ROM-vs-CFD, no ROM-vs-TPU), no es ruido de malla (jitter ≈0.0004 = 0.06% del residuo en energía), y no es el kernel: un GP no estacionario de Gibbs con $\ell(\theta)$ por MLE es idéntico al estacionario (β→0 en los modos con energía), blindado por sensibilidad de forma, ℓ(θ) libre y r\*, y un IC bootstrap n=22 de **[0.00000, 0.00018]**. La base POD sí aporta ~40% del error a un ángulo no visto (más fuera del vórtice que dentro, §8.3). Lo irreducible es la migración del vórtice submuestreada; el único lever es muestreo dirigido, lo que motiva la fase de **sensorización óptima**.
+
 ---
 
 *Pipeline ejecutado en: `Programacion/` — rama git `rom-11-tpu`*
-*Actualizado: 2026-07-15 (incluye holdout pre-registrado §7.6 y suelo de ruido CFD)*
+*Actualizado: 2026-07-18 (añade §8 — suelo de error, descomposición proj/interp externa, kernel no estacionario de Gibbs y sensibilidad; Gibbs como 5º candidato de kernel)*
